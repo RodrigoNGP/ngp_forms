@@ -40,7 +40,8 @@ export interface FormSettings {
   thankYouTitle: string;
   thankYouMessage: string;
   thankYouRedirectUrl: string;
-  gtmContainerId?: string;   // e.g. "GTM-XXXXXX"
+  gtmContainerId?: string;     // e.g. "GTM-XXXXXX"
+  sheetsWebhookUrl?: string;   // Google Apps Script Web App URL
 }
 
 export interface NGPForm {

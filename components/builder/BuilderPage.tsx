@@ -492,15 +492,119 @@ function FormSettingsPanel({ form, update }: { form: NGPForm; update: (p: Partia
             ))}
           </div>
         ) : s.gtmContainerId ? (
-          <div style={{ marginTop: 6, fontSize: 11, color: 'var(--warning)' }}>
-            Formato inválido — use GTM-XXXXXX
-          </div>
+          <div style={{ marginTop: 6, fontSize: 11, color: 'var(--warning)' }}>Formato inválido — use GTM-XXXXXX</div>
         ) : (
-          <div style={{ marginTop: 6, fontSize: 11, color: 'var(--text-muted)' }}>
-            Cole o ID do container do GTM para ativar o rastreamento.
-          </div>
+          <div style={{ marginTop: 6, fontSize: 11, color: 'var(--text-muted)' }}>Cole o ID do container do GTM para ativar o rastreamento.</div>
         )}
       </div>
+
+      {/* ── Google Sheets ── */}
+      <hr className={styles.settingsDivider} />
+      <SheetsPanel url={s.sheetsWebhookUrl || ''} onChange={v => set('sheetsWebhookUrl', v)} />
+    </div>
+  );
+}
+
+/* ── Google Sheets panel ── */
+const APPS_SCRIPT_CODE = `function doPost(e) {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+  const data = JSON.parse(e.postData.contents);
+
+  // Cria cabeçalhos se a planilha estiver vazia
+  if (sheet.getLastRow() === 0) {
+    const headers = ['Data/Hora', 'ID',
+      ...Object.values(data.answers).map((a) => a.fieldTitle)];
+    sheet.appendRow(headers);
+    sheet.getRange(1,1,1,headers.length)
+      .setFontWeight('bold')
+      .setBackground('#6C5CE7')
+      .setFontColor('#ffffff');
+  }
+
+  const row = [
+    new Date(data.submittedAt), data.id,
+    ...Object.values(data.answers).map((a) => {
+      const v = a.value;
+      return Array.isArray(v) ? v.join(', ') : (v ?? '');
+    }),
+  ];
+  sheet.appendRow(row);
+
+  return ContentService
+    .createTextOutput(JSON.stringify({ status: 'ok' }))
+    .setMimeType(ContentService.MimeType.JSON);
+}`;
+
+function SheetsPanel({ url, onChange }: { url: string; onChange: (v: string) => void }) {
+  const [showCode, setShowCode] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const isValid = url.startsWith('https://script.google.com/');
+
+  function copyCode() {
+    navigator.clipboard.writeText(APPS_SCRIPT_CODE).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  }
+
+  return (
+    <div className={styles.settingsGroup}>
+      <label className={styles.settingsLabel} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/>
+        </svg>
+        Google Sheets
+      </label>
+
+      <input
+        className="input"
+        placeholder="https://script.google.com/macros/s/..."
+        value={url}
+        onChange={e => onChange(e.target.value)}
+        style={{ fontFamily: 'monospace', fontSize: 12 }}
+      />
+
+      {isValid && (
+        <div style={{ marginTop: 8, padding: '8px 10px', background: 'rgba(0,200,83,0.08)', border: '1px solid rgba(0,200,83,0.2)', borderRadius: 6, fontSize: 11, fontWeight: 700, color: 'var(--success)' }}>
+          Conectado — respostas irão direto para a planilha
+        </div>
+      )}
+
+      <button
+        type="button"
+        onClick={() => setShowCode(v => !v)}
+        style={{ marginTop: 10, background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: 11, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, padding: 0 }}
+      >
+        <svg width="10" height="10" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ transform: showCode ? 'rotate(90deg)' : 'none', transition: '0.2s' }}>
+          <path d="M3 2l4 4-4 4"/>
+        </svg>
+        {showCode ? 'Ocultar instruções' : 'Como configurar'}
+      </button>
+
+      {showCode && (
+        <div style={{ marginTop: 10, fontSize: 11, color: 'var(--text-secondary)', lineHeight: 1.7 }}>
+          <ol style={{ paddingLeft: 16, display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <li>Abra sua planilha no <strong>Google Sheets</strong></li>
+            <li>Clique em <strong>Extensões → Apps Script</strong></li>
+            <li>Apague o código existente e cole o código abaixo</li>
+            <li>Clique em <strong>Implantar → Nova implantação</strong></li>
+            <li>Tipo: <strong>App da Web</strong> · Acesso: <strong>Qualquer pessoa</strong></li>
+            <li>Copie a URL e cole no campo acima</li>
+          </ol>
+          <div style={{ marginTop: 10, position: 'relative' }}>
+            <pre style={{ background: 'var(--bg-dark)', borderRadius: 6, padding: '10px 12px', fontSize: 10, overflowX: 'auto', lineHeight: 1.6, color: 'var(--text-secondary)', border: '1px solid var(--border)', maxHeight: 180, overflowY: 'auto' }}>
+              {APPS_SCRIPT_CODE}
+            </pre>
+            <button
+              type="button"
+              onClick={copyCode}
+              style={{ position: 'absolute', top: 6, right: 6, background: copied ? 'rgba(0,200,83,0.15)' : 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 4, padding: '3px 8px', fontSize: 10, color: copied ? 'var(--success)' : 'var(--text-secondary)', cursor: 'pointer' }}
+            >
+              {copied ? 'Copiado!' : 'Copiar'}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

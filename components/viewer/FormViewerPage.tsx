@@ -193,7 +193,17 @@ export function FormViewerPage({ id }: { id: string }) {
     slides.forEach(f => {
       ans[f.id] = { fieldTitle: f.title, fieldType: f.type, value: answers[f.id] ?? null };
     });
-    Storage.saveResponse(form.id, { answers: ans });
+    const saved = Storage.saveResponse(form.id, { answers: ans });
+
+    // ── Google Sheets webhook ──
+    if (form.settings.sheetsWebhookUrl?.startsWith('https://script.google.com/')) {
+      fetch(form.settings.sheetsWebhookUrl, {
+        method: 'POST',
+        mode: 'no-cors', // Apps Script suporta CORS mas no-cors garante que não bloqueia
+        body: JSON.stringify(saved),
+      }).catch(() => {}); // fire-and-forget, não bloqueia o envio
+    }
+
     // Mark session as completed
     if (sessionRef.current) {
       sessionRef.current = Storage.completeSession(sessionRef.current);
@@ -251,7 +261,7 @@ export function FormViewerPage({ id }: { id: string }) {
         {slides.map((field, idx) => (
           <div key={field.id} className={`${styles.slide} ${slideClass(idx)}`}>
             <div className={styles.slideInner}>
-              {renderSlide(field, idx, form, answers, setAnswer, toggleChoice, goNext, showError, fileName, setFileName, inputRef, isLastSlide, form.settings.submitButtonText)}
+              {renderSlide(field, idx, form, answers, setAnswer, toggleChoice, goNext, showError, fileName, setFileName, inputRef, isLastSlide, form.settings.submitButtonText, idx === current && !submitted)}
             </div>
           </div>
         ))}
@@ -281,10 +291,10 @@ export function FormViewerPage({ id }: { id: string }) {
       {!submitted && (
         <div className={styles.nav}>
           <button className={styles.navBtn} onClick={goPrev} disabled={current === 0} aria-label="Anterior">
-            <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M3 7h8M7 3l4 4-4 4"/></svg>
+            <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M11 7H3M7 3L3 7l4 4"/></svg>
           </button>
           <button className={styles.navBtn} onClick={goNext} aria-label="Próximo">
-            <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M3 7h8M7 3l4 4-4 4"/></svg>
+            <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7h8M7 3l4 4-4 4"/></svg>
           </button>
         </div>
       )}
@@ -307,6 +317,7 @@ function renderSlide(
   inputRef: React.MutableRefObject<HTMLInputElement | HTMLTextAreaElement | null>,
   isLast: boolean,
   submitLabel: string,
+  isActive: boolean,
 ): React.ReactNode {
   const qNum = form.settings.showQuestionNumbers ? idx + 1 : null;
   const val = answers[field.id];
@@ -340,12 +351,28 @@ function renderSlide(
       {field.description && <p className={styles.qDesc}>{field.description}</p>}
 
       {/* ── short / long / email / phone / number / url ── */}
-      {['short_text', 'email', 'phone', 'number', 'url', 'date'].includes(field.type) && (
+      {field.type === 'phone' && (
         <input
-          ref={inputRef as React.RefObject<HTMLInputElement>}
-          autoFocus
+          ref={isActive ? (inputRef as React.RefObject<HTMLInputElement>) : null}
+          autoFocus={isActive}
           className={`${styles.textInput}${showError && !val ? ' ' + styles.error : ''}`}
-          type={field.type === 'email' ? 'email' : field.type === 'number' ? 'number' : field.type === 'phone' ? 'tel' : field.type === 'date' ? 'date' : field.type === 'url' ? 'url' : 'text'}
+          type="tel"
+          inputMode="numeric"
+          placeholder={field.placeholder || '(00) 00000-0000'}
+          value={(val as string) || ''}
+          maxLength={11}
+          onChange={e => {
+            const onlyDigits = e.target.value.replace(/\D/g, '').slice(0, 11);
+            setAnswer(field.id, onlyDigits);
+          }}
+        />
+      )}
+      {['short_text', 'email', 'number', 'url', 'date'].includes(field.type) && (
+        <input
+          ref={isActive ? (inputRef as React.RefObject<HTMLInputElement>) : null}
+          autoFocus={isActive}
+          className={`${styles.textInput}${showError && !val ? ' ' + styles.error : ''}`}
+          type={field.type === 'email' ? 'email' : field.type === 'number' ? 'number' : field.type === 'date' ? 'date' : field.type === 'url' ? 'url' : 'text'}
           placeholder={field.placeholder || ''}
           value={(val as string) || ''}
           onChange={e => setAnswer(field.id, e.target.value)}
@@ -353,8 +380,8 @@ function renderSlide(
       )}
       {field.type === 'long_text' && (
         <textarea
-          ref={inputRef as React.RefObject<HTMLTextAreaElement>}
-          autoFocus
+          ref={isActive ? (inputRef as React.RefObject<HTMLTextAreaElement>) : null}
+          autoFocus={isActive}
           className={`${styles.textInput}${showError && !val ? ' ' + styles.error : ''}`}
           placeholder={field.placeholder || ''}
           rows={4}
