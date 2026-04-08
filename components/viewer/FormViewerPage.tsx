@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation';
 import * as Storage from '@/lib/storage';
+import * as DB from '@/lib/db';
 import * as GTM from '@/lib/gtm';
 import type { NGPForm, FormField, FormSession } from '@/types/form';
 import styles from './FormViewerPage.module.css';
@@ -30,57 +31,55 @@ export function FormViewerPage({ id }: { id: string }) {
   const gtmActiveRef = useRef<boolean>(false);
 
   useEffect(() => {
-    const f = Storage.getForm(id);
-    if (!f) { setNotFound(true); return; }
-    setForm(f);
-    document.title = f.title;
-    // Apply theme
-    const r = document.documentElement.style;
-    r.setProperty('--viewer-primary', f.theme.primaryColor);
-    r.setProperty('--viewer-bg', f.theme.backgroundColor);
-    r.setProperty('--viewer-text', f.theme.textColor);
-    r.setProperty('--viewer-font', f.theme.fontFamily);
+    DB.getForm(id).then(f => {
+      if (!f) { setNotFound(true); return; }
+      setForm(f);
+      document.title = f.title;
+      const r = document.documentElement.style;
+      r.setProperty('--viewer-primary', f.theme.primaryColor);
+      r.setProperty('--viewer-bg', f.theme.backgroundColor);
+      r.setProperty('--viewer-text', f.theme.textColor);
+      r.setProperty('--viewer-font', f.theme.fontFamily);
 
-    // ── GTM injection ──
-    if (!isPreview && f.settings.gtmContainerId) {
-      const injected = GTM.injectGTM(f.settings.gtmContainerId);
-      gtmActiveRef.current = injected;
-      if (injected) {
-        formStartRef.current = Date.now();
-        GTM.gtmFormStart(f.id, f.title);
+      // ── GTM injection ──
+      if (!isPreview && f.settings.gtmContainerId) {
+        const injected = GTM.injectGTM(f.settings.gtmContainerId);
+        gtmActiveRef.current = injected;
+        if (injected) { formStartRef.current = Date.now(); GTM.gtmFormStart(f.id, f.title); }
       }
-    }
 
-    // ── Session tracking (skip in preview) ──
-    if (!isPreview) {
-      const session = Storage.createSession(f.id);
-      sessionRef.current = session;
-    }
+      // ── Session tracking (skip in preview) ──
+      if (!isPreview) {
+        DB.createSession(f.id).then(session => { sessionRef.current = session; }).catch(() => {});
+      }
 
-    // ── Abandon on tab close ──
-    const handleUnload = () => {
-      if (sessionRef.current && sessionRef.current.status === 'in_progress') {
-        Storage.abandonSession(sessionRef.current);
-      }
-      // GTM abandon event
-      if (gtmActiveRef.current) {
-        const sess = sessionRef.current;
-        const answeredCount = sess ? sess.steps.filter(s => s.answeredAt).length : 0;
-        // Use the ref to get current values synchronously
-        GTM.gtmFormAbandon({
-          formId: f.id,
-          formTitle: f.title,
-          lastQuestionIndex: sess?.steps.length ?? 0,
-          lastQuestionTitle: sess?.lastFieldId
-            ? (f.fields.find(field => field.id === sess.lastFieldId)?.title ?? '')
-            : '',
-          questionsAnswered: answeredCount,
-          totalQuestions: f.fields.length,
-        });
-      }
+      // ── Abandon on tab close ──
+      const handleUnload = () => {
+        if (sessionRef.current && sessionRef.current.status === 'in_progress') {
+          DB.abandonSession(sessionRef.current).catch(() => {});
+        }
+        if (gtmActiveRef.current) {
+          const sess = sessionRef.current;
+          const answeredCount = sess ? sess.steps.filter(s => s.answeredAt).length : 0;
+          GTM.gtmFormAbandon({
+            formId: f.id, formTitle: f.title,
+            lastQuestionIndex: sess?.steps.length ?? 0,
+            lastQuestionTitle: sess?.lastFieldId
+              ? (f.fields.find(field => field.id === sess.lastFieldId)?.title ?? '') : '',
+            questionsAnswered: answeredCount,
+            totalQuestions: f.fields.length,
+          });
+        }
+      };
+      window.addEventListener('beforeunload', handleUnload);
+      // store cleanup fn in a ref so it can be removed
+      (window as Window & { _ngpCleanup?: () => void })._ngpCleanup = () =>
+        window.removeEventListener('beforeunload', handleUnload);
+    }).catch(() => setNotFound(true));
+
+    return () => {
+      (window as Window & { _ngpCleanup?: () => void })._ngpCleanup?.();
     };
-    window.addEventListener('beforeunload', handleUnload);
-    return () => window.removeEventListener('beforeunload', handleUnload);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
@@ -94,11 +93,13 @@ export function FormViewerPage({ id }: { id: string }) {
     if (!field) return;
     stepStartRef.current = Date.now();
 
-    // Session tracking
+    // Session tracking — update in memory then persist to Supabase
     if (sessionRef.current) {
       sessionRef.current = Storage.recordStepView(sessionRef.current, {
         id: field.id, title: field.title, type: field.type,
       });
+      // Persist step to Supabase immediately so abandons have full data
+      DB.updateSession(sessionRef.current).catch(() => {});
     }
     // GTM question view
     if (gtmActiveRef.current) {
@@ -161,6 +162,8 @@ export function FormViewerPage({ id }: { id: string }) {
     const timeMs = Date.now() - stepStartRef.current;
     if (!isPreview && sessionRef.current) {
       sessionRef.current = Storage.recordStepAnswer(sessionRef.current, fieldId, value, timeMs);
+      // Persist answer to Supabase immediately
+      DB.updateSession(sessionRef.current).catch(() => {});
     }
     // GTM question answer
     if (!isPreview && gtmActiveRef.current && form) {
@@ -193,20 +196,21 @@ export function FormViewerPage({ id }: { id: string }) {
     slides.forEach(f => {
       ans[f.id] = { fieldTitle: f.title, fieldType: f.type, value: answers[f.id] ?? null };
     });
-    const saved = Storage.saveResponse(form.id, { answers: ans });
-
-    // ── Google Sheets webhook ──
-    if (form.settings.sheetsWebhookUrl?.startsWith('https://script.google.com/')) {
-      fetch(form.settings.sheetsWebhookUrl, {
-        method: 'POST',
-        mode: 'no-cors', // Apps Script suporta CORS mas no-cors garante que não bloqueia
-        body: JSON.stringify(saved),
-      }).catch(() => {}); // fire-and-forget, não bloqueia o envio
-    }
+    DB.saveResponse(form.id, ans).then(saved => {
+      // ── Google Sheets webhook ──
+      if (form.settings.sheetsWebhookUrl?.startsWith('https://script.google.com/')) {
+        fetch(form.settings.sheetsWebhookUrl, {
+          method: 'POST', mode: 'no-cors',
+          body: JSON.stringify(saved),
+        }).catch(() => {});
+      }
+    }).catch(() => {});
 
     // Mark session as completed
     if (sessionRef.current) {
-      sessionRef.current = Storage.completeSession(sessionRef.current);
+      DB.completeSession(sessionRef.current)
+        .then(updated => { sessionRef.current = updated; })
+        .catch(() => {});
     }
     // GTM form complete
     if (gtmActiveRef.current) {

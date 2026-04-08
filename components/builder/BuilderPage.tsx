@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import * as Storage from '@/lib/storage';
+import * as DB from '@/lib/db';
 import { useToast } from '@/hooks/useToast';
 import type { NGPForm, FormField, FieldType } from '@/types/form';
 import styles from './BuilderPage.module.css';
@@ -86,13 +87,13 @@ export function BuilderPage() {
   useEffect(() => {
     const id = params.get('id');
     if (!id) { router.push('/'); return; }
-    const existing = Storage.getForm(id);
-    if (existing) { setForm(existing); }
-    else {
-      const blank = { ...Storage.createBlankForm(), id };
-      Storage.saveForm(blank);
-      setForm(blank);
-    }
+    DB.getForm(id).then(existing => {
+      if (existing) { setForm(existing); }
+      else {
+        const blank = { ...Storage.createBlankForm(), id };
+        DB.saveForm(blank).then(saved => setForm(saved));
+      }
+    });
   }, [params, router]);
 
   /* auto-save */
@@ -100,8 +101,9 @@ export function BuilderPage() {
     if (!form) return;
     setSaveStatus('saving');
     const t = setTimeout(() => {
-      Storage.saveForm(form);
-      setSaveStatus('saved');
+      DB.saveForm(form)
+        .then(() => setSaveStatus('saved'))
+        .catch(() => setSaveStatus('idle'));
     }, 700);
     return () => clearTimeout(t);
   }, [form]);
@@ -406,6 +408,31 @@ function FieldSettingsPanel({ field, update }: { field: FormField; update: (p: P
 function ThemePanel({ form, update }: { form: NGPForm; update: (p: Partial<NGPForm>) => void }) {
   const t = form.theme;
   const set = (k: keyof typeof t, v: string) => update({ theme: { ...t, [k]: v } });
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState('');
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  async function handleImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) { setUploadError('Máximo 5 MB'); return; }
+    setUploadError('');
+    setUploading(true);
+    try {
+      const url = await DB.uploadImage(file, form.id);
+      set('backgroundImage', url);
+    } catch {
+      setUploadError('Erro ao fazer upload. Verifique o bucket "form-images" no Supabase Storage.');
+    } finally {
+      setUploading(false);
+      if (fileRef.current) fileRef.current.value = '';
+    }
+  }
+
+  function removeImage() {
+    if (t.backgroundImage) DB.deleteImage(t.backgroundImage).catch(() => {});
+    set('backgroundImage', '');
+  }
 
   return (
     <div className={styles.settingsBody}>
@@ -426,9 +453,49 @@ function ThemePanel({ form, update }: { form: NGPForm; update: (p: Partial<NGPFo
           ))}
         </select>
       </div>
+
+      {/* ── Background image ── */}
       <div className={styles.settingsGroup}>
-        <label className={styles.settingsLabel}>Imagem de fundo (URL)</label>
-        <input className="input" placeholder="https://..." value={t.backgroundImage || ''} onChange={e => set('backgroundImage', e.target.value)} />
+        <label className={styles.settingsLabel}>Imagem de fundo</label>
+
+        {t.backgroundImage ? (
+          <div style={{ position: 'relative', borderRadius: 8, overflow: 'hidden', border: '1px solid var(--border)' }}>
+            {/* preview */}
+            <div style={{ height: 90, backgroundImage: `url(${t.backgroundImage})`, backgroundSize: 'cover', backgroundPosition: 'center' }} />
+            <button
+              type="button"
+              onClick={removeImage}
+              style={{ position: 'absolute', top: 6, right: 6, background: 'rgba(0,0,0,0.7)', border: 'none', borderRadius: 6, padding: '4px 8px', color: '#fff', fontSize: 11, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}
+            >
+              <svg width="10" height="10" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M1 1l8 8M9 1L1 9"/></svg>
+              Remover
+            </button>
+          </div>
+        ) : (
+          <button
+            type="button"
+            disabled={uploading}
+            onClick={() => fileRef.current?.click()}
+            style={{ width: '100%', padding: '18px 12px', border: '2px dashed var(--border)', borderRadius: 8, background: 'transparent', color: uploading ? 'var(--text-muted)' : 'var(--text-secondary)', fontSize: 13, cursor: uploading ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, transition: 'var(--transition)' }}
+          >
+            {uploading ? (
+              <>
+                <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" style={{ animation: 'spin 1s linear infinite' }}><path d="M7 1v2M7 11v2M1 7h2M11 7h2M2.5 2.5l1.5 1.5M8.5 8.5l1.5 1.5M2.5 11.5l1.5-1.5M8.5 5.5l1.5-1.5"/></svg>
+                Enviando…
+              </>
+            ) : (
+              <>
+                <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M7 1v8M4 4l3-3 3 3"/><path d="M1 11v2h12v-2"/></svg>
+                Clique para fazer upload
+              </>
+            )}
+          </button>
+        )}
+
+        <input ref={fileRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleImageUpload} />
+
+        {uploadError && <div style={{ marginTop: 6, fontSize: 11, color: 'var(--danger)' }}>{uploadError}</div>}
+        <div style={{ marginTop: 6, fontSize: 11, color: 'var(--text-muted)' }}>JPG, PNG, WebP · máx 5 MB</div>
       </div>
     </div>
   );

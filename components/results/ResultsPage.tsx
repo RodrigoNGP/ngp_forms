@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import * as Storage from '@/lib/storage';
+import * as DB from '@/lib/db';
 import { useToast } from '@/hooks/useToast';
 import type { NGPForm, FormResponse, FieldType, FormSession } from '@/types/form';
 import styles from './ResultsPage.module.css';
@@ -24,12 +24,15 @@ export function ResultsPage({ id }: { id: string }) {
   const [selectedSession, setSelectedSession] = useState<FormSession | null>(null);
 
   useEffect(() => {
-    const f = Storage.getForm(id);
-    if (!f) { router.push('/'); return; }
-    setForm(f);
-    document.title = `Respostas — ${f.title}`;
-    setResponses(Storage.getResponses(id));
-    setSessions(Storage.getSessions(id));
+    Promise.all([DB.getForm(id), DB.getResponses(id), DB.getSessions(id)])
+      .then(([f, res, sess]) => {
+        if (!f) { router.push('/'); return; }
+        setForm(f);
+        document.title = `Respostas — ${f.title}`;
+        setResponses(res);
+        setSessions(sess);
+      })
+      .catch(console.error);
   }, [id, router]);
 
   function exportCSV() {

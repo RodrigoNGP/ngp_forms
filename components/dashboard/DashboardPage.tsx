@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import * as Storage from '@/lib/storage';
+import * as DB from '@/lib/db';
 import { useToast } from '@/hooks/useToast';
 import type { NGPForm } from '@/types/form';
 import styles from './DashboardPage.module.css';
@@ -71,13 +72,28 @@ export function DashboardPage() {
   const router = useRouter();
   const { toasts, showToast } = useToast();
   const [forms, setForms] = useState<NGPForm[]>([]);
+  const [responseCounts, setResponseCounts] = useState<Record<string, number>>({});
+  const [totalResponses, setTotalResponses] = useState(0);
+  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
 
-  const loadForms = useCallback(() => {
-    const all = Storage.getForms();
-    all.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
-    setForms(all);
+  const loadForms = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [all, counts] = await Promise.all([
+        DB.getForms(),
+        DB.getAllResponseCounts(),
+      ]);
+      all.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+      setForms(all);
+      setResponseCounts(counts);
+      setTotalResponses(Object.values(counts).reduce((s, n) => s + n, 0));
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => { loadForms(); }, [loadForms]);
@@ -85,32 +101,29 @@ export function DashboardPage() {
   const stats = {
     total: forms.length,
     published: forms.filter((f) => f.published).length,
-    responses: (() => {
-      const all = Storage.getAllResponses();
-      return Object.values(all).reduce((s, r) => s + r.length, 0);
-    })(),
+    responses: totalResponses,
   };
 
   const filtered = search
     ? forms.filter((f) => f.title.toLowerCase().includes(search.toLowerCase()))
     : forms;
 
-  function createNew() {
+  async function createNew() {
     const form = Storage.createBlankForm();
-    Storage.saveForm(form);
+    await DB.saveForm(form);
     router.push(`/builder?id=${form.id}`);
   }
 
-  function handleDuplicate(id: string) {
-    Storage.duplicateForm(id);
-    loadForms();
+  async function handleDuplicate(id: string) {
+    await DB.duplicateForm(id);
+    await loadForms();
     showToast('Formulário duplicado', 'success');
   }
 
-  function handleDelete(id: string) {
-    Storage.deleteForm(id);
+  async function handleDelete(id: string) {
+    await DB.deleteForm(id);
     setDeleteTarget(null);
-    loadForms();
+    await loadForms();
     showToast('Formulário excluído', 'info');
   }
 
@@ -178,7 +191,13 @@ export function DashboardPage() {
             <span>Novo formulário</span>
           </button>
 
-          {filtered.length === 0 && search && (
+          {loading && (
+            <div className={styles.empty} style={{ gridColumn: '1/-1' }}>
+              <p>Carregando...</p>
+            </div>
+          )}
+
+          {!loading && filtered.length === 0 && search && (
             <div className={styles.empty} style={{ gridColumn: '1/-1' }}>
               <Icon.EmptyForm />
               <h3>Nenhum resultado</h3>
@@ -186,7 +205,7 @@ export function DashboardPage() {
             </div>
           )}
 
-          {filtered.length === 0 && !search && (
+          {!loading && filtered.length === 0 && !search && (
             <div className={styles.empty} style={{ gridColumn: '1/-1' }}>
               <Icon.EmptyForm />
               <h3>Nenhum formulário ainda</h3>
@@ -199,7 +218,7 @@ export function DashboardPage() {
 
           {filtered.map((form, i) => {
             const color = form.theme?.primaryColor || PALETTE[i % PALETTE.length];
-            const responseCount = Storage.getResponseCount(form.id);
+            const responseCount = responseCounts[form.id] ?? 0;
             const fieldCount = form.fields?.length || 0;
             const date = new Date(form.updatedAt).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' });
 
