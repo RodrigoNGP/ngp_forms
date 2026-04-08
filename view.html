@@ -1,0 +1,585 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NGP Forms</title>
+  <link rel="stylesheet" href="css/style.css">
+  <style>
+    :root {
+      --form-primary: #6C5CE7;
+      --form-bg: #1a1a2e;
+      --form-text: #ffffff;
+      --form-font: 'Inter', sans-serif;
+    }
+
+    body {
+      background: var(--form-bg);
+      color: var(--form-text);
+      font-family: var(--form-font);
+      overflow: hidden;
+      height: 100vh;
+    }
+
+    .progress-bar {
+      position: fixed; top: 0; left: 0; height: 3px;
+      background: var(--form-primary);
+      transition: width 0.5s cubic-bezier(0.4,0,0.2,1);
+      z-index: 100;
+    }
+
+    .form-container { height: 100vh; display: flex; flex-direction: column; position: relative; }
+
+    .slides-wrapper { flex: 1; position: relative; overflow: hidden; }
+
+    .slide {
+      position: absolute; inset: 0;
+      display: flex; align-items: center; justify-content: center;
+      padding: 40px; opacity: 0; transform: translateY(40px);
+      transition: 0.55s cubic-bezier(0.16,1,0.3,1);
+      pointer-events: none; overflow-y: auto;
+    }
+    .slide.active { opacity: 1; transform: translateY(0); pointer-events: auto; }
+    .slide.exit-up { opacity: 0; transform: translateY(-60px); }
+    .slide.exit-down { opacity: 0; transform: translateY(60px); }
+
+    .slide-content { max-width: 620px; width: 100%; }
+
+    .question-number {
+      display: inline-flex; align-items: center; gap: 6px;
+      font-size: 13px; font-weight: 600; color: var(--form-primary); margin-bottom: 14px;
+    }
+    .question-number span {
+      background: var(--form-primary); color: #fff;
+      width: 24px; height: 24px; border-radius: 6px;
+      display: inline-flex; align-items: center; justify-content: center;
+      font-size: 12px; font-weight: 700;
+    }
+
+    .question-title {
+      font-size: clamp(22px, 4vw, 30px); font-weight: 700;
+      line-height: 1.3; margin-bottom: 8px; letter-spacing: -0.3px;
+    }
+    .question-description {
+      font-size: 15px; color: rgba(255,255,255,0.55);
+      margin-bottom: 28px; line-height: 1.6;
+    }
+    .required-star { color: var(--form-primary); }
+
+    /* Text inputs */
+    .form-input {
+      width: 100%; background: transparent; border: none;
+      border-bottom: 2px solid rgba(255,255,255,0.15);
+      color: var(--form-text); font-size: 22px; font-family: inherit;
+      padding: 14px 0; outline: none; transition: 0.3s;
+    }
+    .form-input:focus { border-bottom-color: var(--form-primary); }
+    .form-input::placeholder { color: rgba(255,255,255,0.2); }
+    textarea.form-input { resize: none; min-height: 110px; line-height: 1.5; }
+
+    /* Choices */
+    .choices { display: flex; flex-direction: column; gap: 10px; }
+    .choice-btn {
+      display: flex; align-items: center; gap: 12px;
+      padding: 14px 18px; border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 10px; background: rgba(255,255,255,0.03);
+      color: var(--form-text); font-size: 15px; font-weight: 500;
+      text-align: left; transition: 0.2s; cursor: pointer; width: 100%;
+    }
+    .choice-btn:hover { border-color: var(--form-primary); background: rgba(108,92,231,0.07); transform: translateX(3px); }
+    .choice-btn.selected { border-color: var(--form-primary); background: rgba(108,92,231,0.12); box-shadow: 0 0 0 2px var(--form-primary); }
+
+    .choice-key {
+      width: 26px; height: 26px; border-radius: 6px;
+      border: 1px solid rgba(255,255,255,0.18);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 11px; font-weight: 700; flex-shrink: 0; transition: 0.2s;
+    }
+    .choice-btn.selected .choice-key { background: var(--form-primary); border-color: var(--form-primary); }
+
+    .check-icon { display: none; margin-left: auto; color: var(--form-primary); }
+    .choice-btn.selected .check-icon { display: block; }
+
+    /* Yes/No */
+    .yesno-row { display: flex; gap: 14px; }
+    .yesno-btn {
+      flex: 1; padding: 22px 20px; border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 14px; background: rgba(255,255,255,0.03);
+      color: var(--form-text); font-size: 17px; font-weight: 700;
+      text-align: center; cursor: pointer; transition: 0.2s;
+    }
+    .yesno-btn:hover { border-color: var(--form-primary); transform: scale(1.02); }
+    .yesno-btn.selected { border-color: var(--form-primary); background: rgba(108,92,231,0.12); box-shadow: 0 0 0 2px var(--form-primary); }
+
+    /* Rating */
+    .rating-row { display: flex; gap: 6px; }
+    .rating-star {
+      font-size: 36px; cursor: pointer; transition: 0.2s;
+      filter: grayscale(1) opacity(0.25); line-height: 1;
+    }
+    .rating-star:hover, .rating-star.active { filter: none; transform: scale(1.12); }
+
+    /* Scale */
+    .scale-row { display: flex; gap: 6px; flex-wrap: wrap; }
+    .scale-btn {
+      width: 48px; height: 48px; border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 10px; background: rgba(255,255,255,0.03);
+      color: var(--form-text); font-size: 16px; font-weight: 700;
+      cursor: pointer; transition: 0.2s; display: flex; align-items: center; justify-content: center;
+    }
+    .scale-btn:hover { border-color: var(--form-primary); transform: scale(1.06); }
+    .scale-btn.selected { background: var(--form-primary); border-color: var(--form-primary); }
+    .scale-labels { display: flex; justify-content: space-between; margin-top: 10px; font-size: 12px; color: rgba(255,255,255,0.35); }
+
+    /* Dropdown */
+    .form-select {
+      width: 100%; padding: 14px 18px;
+      background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 10px; color: var(--form-text);
+      font-size: 16px; font-family: inherit; outline: none; appearance: none; cursor: pointer;
+    }
+    .form-select:focus { border-color: var(--form-primary); }
+    .form-select option { background: var(--form-bg); }
+
+    /* File upload */
+    .file-drop {
+      border: 1px dashed rgba(255,255,255,0.15); border-radius: 14px;
+      padding: 44px; text-align: center; cursor: pointer; transition: 0.2s;
+    }
+    .file-drop:hover { border-color: var(--form-primary); background: rgba(108,92,231,0.05); }
+    .file-drop svg { opacity: 0.3; margin-bottom: 12px; }
+    .file-drop p { color: rgba(255,255,255,0.4); font-size: 13px; }
+    .file-name { margin-top: 10px; font-size: 13px; color: var(--form-primary); font-weight: 600; }
+
+    /* Button */
+    .nav-btn-row { margin-top: 28px; display: flex; align-items: center; gap: 14px; }
+    .next-btn {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 13px 26px; background: var(--form-primary); color: #fff;
+      border-radius: 9px; font-size: 15px; font-weight: 700;
+      cursor: pointer; border: none; font-family: inherit; transition: 0.2s;
+    }
+    .next-btn:hover { filter: brightness(1.1); transform: translateY(-1px); }
+    .key-hint { font-size: 12px; color: rgba(255,255,255,0.25); }
+    .key-hint kbd { background: rgba(255,255,255,0.08); padding: 2px 7px; border-radius: 4px; font-family: inherit; font-size: 11px; }
+
+    /* Nav arrows */
+    .nav-arrows { position: fixed; bottom: 24px; right: 24px; display: flex; gap: 4px; z-index: 50; }
+    .nav-arrow {
+      width: 40px; height: 40px; border-radius: 9px;
+      background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1);
+      color: rgba(255,255,255,0.7); font-size: 14px; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      transition: 0.2s; backdrop-filter: blur(10px);
+    }
+    .nav-arrow:hover { background: var(--form-primary); border-color: var(--form-primary); color: #fff; }
+    .nav-arrow:disabled { opacity: 0.2; cursor: not-allowed; }
+    .nav-arrow:disabled:hover { background: rgba(255,255,255,0.06); border-color: rgba(255,255,255,0.1); color: rgba(255,255,255,0.7); }
+
+    /* Branding */
+    .branding { position: fixed; bottom: 24px; left: 24px; font-size: 11px; color: rgba(255,255,255,0.2); z-index: 50; }
+    .branding a { color: rgba(255,255,255,0.3); text-decoration: none; }
+    .branding a:hover { color: rgba(255,255,255,0.6); }
+
+    /* Welcome */
+    .welcome-screen { text-align: center; }
+    .welcome-screen .question-title { font-size: clamp(28px, 5vw, 44px); margin-bottom: 14px; }
+    .welcome-screen .next-btn { font-size: 16px; padding: 16px 36px; border-radius: 12px; margin-top: 8px; }
+
+    /* Thank you */
+    .thankyou-screen { text-align: center; }
+    .thankyou-screen .check-circle {
+      width: 72px; height: 72px; border-radius: 50%;
+      background: rgba(108,92,231,0.15); border: 2px solid var(--form-primary);
+      display: flex; align-items: center; justify-content: center;
+      margin: 0 auto 24px; color: var(--form-primary);
+    }
+    .thankyou-screen .question-title { font-size: clamp(24px, 4vw, 36px); }
+    .thankyou-screen .question-description { font-size: 16px; }
+
+    /* Error */
+    .field-error { color: #FF5252; font-size: 12px; margin-top: 8px; display: none; }
+    .field-error.visible { display: block; }
+
+    /* Bg image */
+    .bg-image { position: fixed; inset: 0; background-size: cover; background-position: center; opacity: 0.12; z-index: -1; }
+
+    @keyframes shake { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-7px)} 75%{transform:translateX(7px)} }
+    .shake { animation: shake 0.35s ease; }
+
+    @media (max-width: 640px) {
+      .slide { padding: 24px 18px; }
+      .question-title { font-size: 20px; }
+      .form-input { font-size: 18px; }
+      .choice-btn { padding: 12px 14px; font-size: 14px; }
+      .scale-btn { width: 38px; height: 38px; font-size: 13px; }
+      .yesno-btn { padding: 18px; font-size: 16px; }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="bg-image" id="bgImage"></div>
+  <div class="progress-bar" id="progressBar" style="width:0%"></div>
+
+  <div class="form-container">
+    <div class="slides-wrapper" id="slidesWrapper"></div>
+  </div>
+
+  <div class="nav-arrows">
+    <button class="nav-arrow" onclick="goToPrev()" id="prevBtn">
+      <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="2 10 7 5 12 10"/></svg>
+    </button>
+    <button class="nav-arrow" onclick="goToNext()" id="nextBtn">
+      <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="2 4 7 9 12 4"/></svg>
+    </button>
+  </div>
+
+  <div class="branding">Criado com <a href="index.html">NGP Forms</a></div>
+  <div class="toast-container" id="toastContainer"></div>
+
+  <script src="js/storage.js"></script>
+  <script>
+    let form = null, slides = [], currentSlide = 0, answers = {}, isAnimating = false;
+
+    function init() {
+      const params = new URLSearchParams(window.location.search);
+      const id = params.get('id');
+      if (!id) return showError('Formulário não encontrado');
+      form = Storage.getForm(id);
+      if (!form) return showError('Formulário não encontrado');
+      if (!form.published && !params.get('preview')) return showError('Este formulário não está publicado');
+
+      applyTheme();
+      document.title = form.title;
+      slides = form.fields.filter(f => f.type !== 'thank_you');
+      if (slides.length === 0) return showError('Este formulário não tem perguntas');
+
+      renderSlides();
+      updateProgress();
+      updateNavButtons();
+    }
+
+    function applyTheme() {
+      const t = form.theme || {};
+      document.documentElement.style.setProperty('--form-primary', t.primaryColor || '#6C5CE7');
+      document.documentElement.style.setProperty('--form-bg', t.backgroundColor || '#1a1a2e');
+      document.documentElement.style.setProperty('--form-text', t.textColor || '#ffffff');
+      document.body.style.background = t.backgroundColor || '#1a1a2e';
+      if (t.fontFamily) {
+        document.documentElement.style.setProperty('--form-font', `'${t.fontFamily}', sans-serif`);
+        document.body.style.fontFamily = `'${t.fontFamily}', sans-serif`;
+      }
+      if (t.backgroundImage) document.getElementById('bgImage').style.backgroundImage = `url(${t.backgroundImage})`;
+    }
+
+    function renderSlides() {
+      const wrapper = document.getElementById('slidesWrapper');
+      let qNum = 0;
+      let html = slides.map((field, idx) => {
+        const isQ = !['welcome','statement'].includes(field.type);
+        if (isQ) qNum++;
+        return `<div class="slide ${idx===0?'active':''}" id="slide-${idx}">${renderContent(field, idx, isQ ? qNum : 0)}</div>`;
+      }).join('');
+      html += `<div class="slide" id="slide-thankyou">${renderThankYou()}</div>`;
+      wrapper.innerHTML = html;
+    }
+
+    function renderContent(field, idx, num) {
+      const showNums = form.settings?.showQuestionNumbers !== false;
+      const req = field.required ? '<span class="required-star"> *</span>' : '';
+      const isLast = idx === slides.length - 1;
+      const submitText = form.settings?.submitButtonText || 'Enviar';
+
+      if (field.type === 'welcome') {
+        return `<div class="slide-content welcome-screen">
+          <div class="question-title">${e(field.title)}</div>
+          <div class="question-description">${e(field.description)}</div>
+          <button class="next-btn" onclick="goToNext()">${e(field.buttonText||'Começar')}
+            <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="2" y1="7" x2="12" y2="7"/><polyline points="8 3 12 7 8 11"/></svg>
+          </button>
+        </div>`;
+      }
+
+      if (field.type === 'statement') {
+        return `<div class="slide-content">
+          <div class="question-title">${e(field.title)}</div>
+          <div class="question-description">${e(field.description)}</div>
+          <div class="nav-btn-row">
+            <button class="next-btn" onclick="goToNext()">${e(field.buttonText||'Continuar')}
+              <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="2" y1="7" x2="12" y2="7"/><polyline points="8 3 12 7 8 11"/></svg>
+            </button>
+          </div>
+        </div>`;
+      }
+
+      let inputHtml = '';
+      const checkSvg = `<svg class="check-icon" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="3 8 7 12 13 4"/></svg>`;
+
+      switch (field.type) {
+        case 'short_text':
+        case 'email':
+        case 'phone':
+        case 'url': {
+          const t = {email:'email',phone:'tel',url:'url'}[field.type]||'text';
+          inputHtml = `<input type="${t}" class="form-input" id="input-${field.id}" placeholder="${ea(field.placeholder||'')}" value="${ea(answers[field.id]||'')}" oninput="setAnswer('${field.id}',this.value)">`;
+          break;
+        }
+        case 'long_text':
+          inputHtml = `<textarea class="form-input" id="input-${field.id}" placeholder="${ea(field.placeholder||'')}" oninput="setAnswer('${field.id}',this.value)">${e(answers[field.id]||'')}</textarea>`;
+          break;
+        case 'number':
+          inputHtml = `<input type="number" class="form-input" id="input-${field.id}" placeholder="${ea(field.placeholder||'0')}" value="${ea(answers[field.id]||'')}" oninput="setAnswer('${field.id}',this.value)">`;
+          break;
+        case 'date':
+          inputHtml = `<input type="date" class="form-input" id="input-${field.id}" value="${answers[field.id]||''}" oninput="setAnswer('${field.id}',this.value)" style="color-scheme:dark;">`;
+          break;
+        case 'multiple_choice': {
+          const mc = answers[field.id];
+          inputHtml = `<div class="choices">${(field.options||[]).map((opt,i)=>{
+            const key = String.fromCharCode(65+i);
+            const sel = field.allowMultiple ? (Array.isArray(mc)&&mc.includes(opt)) : mc===opt;
+            return `<button class="choice-btn ${sel?'selected':''}" onclick="selectChoice('${field.id}','${ea(opt)}',${!!field.allowMultiple})"><span class="choice-key">${key}</span>${e(opt)}${checkSvg}</button>`;
+          }).join('')}</div>`;
+          break;
+        }
+        case 'checkbox': {
+          const cb = answers[field.id]||[];
+          inputHtml = `<div class="choices">${(field.options||[]).map(opt=>{
+            const sel = Array.isArray(cb)&&cb.includes(opt);
+            return `<button class="choice-btn ${sel?'selected':''}" onclick="selectChoice('${field.id}','${ea(opt)}',true)">
+              <span class="choice-key"><svg width="10" height="10" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="1 5 4 8 9 2"/></svg></span>
+              ${e(opt)}${checkSvg}</button>`;
+          }).join('')}</div>`;
+          break;
+        }
+        case 'dropdown':
+          inputHtml = `<select class="form-select" id="input-${field.id}" onchange="setAnswer('${field.id}',this.value)">
+            <option value="">Selecione...</option>
+            ${(field.options||[]).map(opt=>`<option value="${ea(opt)}" ${answers[field.id]===opt?'selected':''}>${e(opt)}</option>`).join('')}
+          </select>`;
+          break;
+        case 'yes_no':
+          inputHtml = `<div class="yesno-row">
+            <button class="yesno-btn ${answers[field.id]==='Sim'?'selected':''}" onclick="setAnswer('${field.id}','Sim');this.classList.add('selected');this.nextElementSibling.classList.remove('selected');setTimeout(()=>goToNext(),350);">Sim</button>
+            <button class="yesno-btn ${answers[field.id]==='Não'?'selected':''}" onclick="setAnswer('${field.id}','Não');this.classList.add('selected');this.previousElementSibling.classList.remove('selected');setTimeout(()=>goToNext(),350);">Não</button>
+          </div>`;
+          break;
+        case 'rating': {
+          const maxR = field.maxRating||5;
+          const curR = answers[field.id]||0;
+          inputHtml = `<div class="rating-row">${Array.from({length:maxR},(_,i)=>
+            `<span class="rating-star ${i<curR?'active':''}" onclick="setRating('${field.id}',${i+1})">★</span>`
+          ).join('')}</div>`;
+          break;
+        }
+        case 'opinion_scale': {
+          const min = field.minValue||0, max = field.maxValue||10;
+          inputHtml = `<div class="scale-row">${Array.from({length:max-min+1},(_,i)=>{
+            const val = min+i;
+            return `<button class="scale-btn ${answers[field.id]==val?'selected':''}" onclick="setAnswer('${field.id}',${val});renderSlides();goToSlide(${currentSlide});setTimeout(()=>goToNext(),450);">${val}</button>`;
+          }).join('')}</div>
+          <div class="scale-labels"><span>${e(field.minLabel||'')}</span><span>${e(field.maxLabel||'')}</span></div>`;
+          break;
+        }
+        case 'file_upload':
+          inputHtml = `<div class="file-drop" onclick="document.getElementById('file-${field.id}').click()">
+            <svg width="32" height="32" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M16 20V8"/><polyline points="10 14 16 8 22 14"/><path d="M4 26h24"/></svg>
+            <p>Clique para selecionar um arquivo</p>
+            <div class="file-name" id="fileName-${field.id}">${answers[field.id]||''}</div>
+          </div>
+          <input type="file" id="file-${field.id}" style="display:none" accept="${field.allowedTypes||'*'}" onchange="handleFile('${field.id}',this)">`;
+          break;
+      }
+
+      const nextArrow = `<svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="1" y1="6.5" x2="11" y2="6.5"/><polyline points="7 2.5 11 6.5 7 10.5"/></svg>`;
+
+      return `<div class="slide-content">
+        ${showNums && num > 0 ? `<div class="question-number"><span>${num}</span><svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="1" y1="6" x2="11" y2="6"/><polyline points="7 2 11 6 7 10"/></svg></div>` : ''}
+        <div class="question-title">${e(field.title)}${req}</div>
+        ${field.description ? `<div class="question-description">${e(field.description)}</div>` : ''}
+        ${inputHtml}
+        <div class="field-error" id="error-${field.id}">Este campo é obrigatório</div>
+        ${field.type !== 'yes_no' ? `
+          <div class="nav-btn-row">
+            <button class="next-btn" onclick="${isLast ? 'submitForm()' : 'goToNext()'}">
+              ${isLast ? e(submitText) : 'OK'} ${nextArrow}
+            </button>
+            <span class="key-hint">pressione <kbd>Enter</kbd></span>
+          </div>` : ''}
+      </div>`;
+    }
+
+    function renderThankYou() {
+      const s = form.settings || {};
+      return `<div class="slide-content thankyou-screen">
+        <div class="check-circle">
+          <svg width="32" height="32" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="6 16 13 23 26 9"/></svg>
+        </div>
+        <div class="question-title">${e(s.thankYouTitle||'Obrigado!')}</div>
+        <div class="question-description">${e(s.thankYouMessage||'Suas respostas foram enviadas.')}</div>
+        ${s.thankYouRedirectUrl ? `<a href="${e(s.thankYouRedirectUrl)}" class="next-btn" style="display:inline-flex;margin-top:20px;text-decoration:none;">Continuar</a>` : ''}
+      </div>`;
+    }
+
+    function goToSlide(idx) {
+      if (idx < 0 || idx > slides.length) return;
+      document.querySelectorAll('.slide').forEach((s, i) => {
+        s.classList.remove('active','exit-up','exit-down');
+        if (i < idx) s.classList.add('exit-up');
+        if (i > idx) s.classList.add('exit-down');
+        if (i === idx) s.classList.add('active');
+      });
+      // Handle thank-you separately
+      const ty = document.getElementById('slide-thankyou');
+      if (ty) {
+        ty.classList.remove('active','exit-up','exit-down');
+        if (idx === slides.length) ty.classList.add('active');
+        else ty.classList.add('exit-down');
+      }
+      currentSlide = idx;
+      updateProgress();
+      updateNavButtons();
+      setTimeout(() => {
+        const active = document.querySelector('.slide.active');
+        if (active) { const inp = active.querySelector('input:not([type=file]),textarea,select'); if (inp) inp.focus(); }
+      }, 400);
+    }
+
+    function goToNext() {
+      if (isAnimating) return;
+      if (currentSlide < slides.length) {
+        const field = slides[currentSlide];
+        if (!validateField(field)) return;
+      }
+      if (currentSlide >= slides.length) return;
+      isAnimating = true;
+      goToSlide(currentSlide + 1);
+      setTimeout(() => isAnimating = false, 500);
+    }
+
+    function goToPrev() {
+      if (isAnimating || currentSlide <= 0) return;
+      isAnimating = true;
+      goToSlide(currentSlide - 1);
+      setTimeout(() => isAnimating = false, 500);
+    }
+
+    function updateProgress() {
+      const bar = document.getElementById('progressBar');
+      if (form.settings?.showProgressBar === false) { bar.style.display = 'none'; return; }
+      bar.style.width = (slides.length > 0 ? (currentSlide / slides.length) * 100 : 0) + '%';
+    }
+
+    function updateNavButtons() {
+      document.getElementById('prevBtn').disabled = currentSlide <= 0;
+      document.getElementById('nextBtn').disabled = currentSlide >= slides.length;
+    }
+
+    function setAnswer(fieldId, value) {
+      answers[fieldId] = value;
+      const err = document.getElementById('error-' + fieldId);
+      if (err) err.classList.remove('visible');
+    }
+
+    function selectChoice(fieldId, value, allowMultiple) {
+      if (allowMultiple) {
+        if (!Array.isArray(answers[fieldId])) answers[fieldId] = [];
+        const idx = answers[fieldId].indexOf(value);
+        if (idx >= 0) answers[fieldId].splice(idx, 1);
+        else answers[fieldId].push(value);
+      } else {
+        answers[fieldId] = value;
+      }
+      renderSlides(); goToSlide(currentSlide);
+      if (!allowMultiple) setTimeout(() => goToNext(), 350);
+    }
+
+    function setRating(fieldId, value) {
+      answers[fieldId] = value;
+      renderSlides(); goToSlide(currentSlide);
+      setTimeout(() => goToNext(), 450);
+    }
+
+    function handleFile(fieldId, input) {
+      if (input.files.length > 0) {
+        answers[fieldId] = input.files[0].name;
+        const el = document.getElementById('fileName-' + fieldId);
+        if (el) el.textContent = input.files[0].name;
+      }
+    }
+
+    function validateField(field) {
+      if (!field.required || ['welcome','statement'].includes(field.type)) return true;
+      const val = answers[field.id];
+      let valid = val !== undefined && val !== null && val !== '';
+      if (Array.isArray(val)) valid = val.length > 0;
+      if (!valid) {
+        const err = document.getElementById('error-' + field.id);
+        if (err) err.classList.add('visible');
+        const s = document.getElementById('slide-' + currentSlide);
+        if (s) { s.querySelector('.slide-content')?.classList.add('shake'); setTimeout(() => s.querySelector('.slide-content')?.classList.remove('shake'), 400); }
+        return false;
+      }
+      if (field.type === 'email' && val && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val)) {
+        const err = document.getElementById('error-' + field.id);
+        if (err) { err.textContent = 'E-mail inválido'; err.classList.add('visible'); }
+        return false;
+      }
+      return true;
+    }
+
+    function submitForm() {
+      if (currentSlide < slides.length) {
+        if (!validateField(slides[currentSlide])) return;
+      }
+      const response = { answers: {}, metadata: { timestamp: new Date().toISOString() } };
+      slides.forEach(field => {
+        if (['welcome','statement'].includes(field.type)) return;
+        response.answers[field.id] = { fieldTitle: field.title, fieldType: field.type, value: answers[field.id] || null };
+      });
+      const params = new URLSearchParams(window.location.search);
+      if (!params.get('preview')) Storage.saveResponse(form.id, response);
+      goToSlide(slides.length);
+    }
+
+    document.addEventListener('keydown', e => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        if (document.activeElement?.tagName === 'TEXTAREA') return;
+        e.preventDefault();
+        currentSlide === slides.length - 1 ? submitForm() : goToNext();
+      }
+      if (e.key === 'ArrowUp') { e.preventDefault(); goToPrev(); }
+      if (e.key === 'Escape') { /* noop */ }
+      if (currentSlide < slides.length) {
+        const field = slides[currentSlide];
+        if (field.type === 'multiple_choice' && field.options) {
+          const ki = e.key.toUpperCase().charCodeAt(0) - 65;
+          if (ki >= 0 && ki < field.options.length) selectChoice(field.id, field.options[ki], !!field.allowMultiple);
+        }
+      }
+    });
+
+    let wheelTimeout;
+    document.addEventListener('wheel', e => {
+      clearTimeout(wheelTimeout);
+      wheelTimeout = setTimeout(() => { if (e.deltaY > 30) goToNext(); else if (e.deltaY < -30) goToPrev(); }, 120);
+    }, { passive: true });
+
+    function showError(msg) {
+      document.getElementById('slidesWrapper').innerHTML = `
+        <div class="slide active"><div class="slide-content" style="text-align:center;">
+          <svg width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" style="opacity:0.3;margin-bottom:20px;"><circle cx="24" cy="24" r="20"/><line x1="24" y1="14" x2="24" y2="26"/><circle cx="24" cy="32" r="1.5" fill="currentColor"/></svg>
+          <div class="question-title">${msg}</div>
+          <a href="index.html" class="next-btn" style="display:inline-flex;margin-top:24px;text-decoration:none;">Ir ao dashboard</a>
+        </div></div>`;
+      document.querySelector('.nav-arrows').style.display = 'none';
+    }
+
+    function e(str) { const d = document.createElement('div'); d.textContent = str||''; return d.innerHTML; }
+    function ea(str) { return (str||'').replace(/'/g,"\\'").replace(/"/g,'&quot;'); }
+
+    init();
+  </script>
+</body>
+</html>

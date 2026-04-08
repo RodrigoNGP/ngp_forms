@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NGP Forms — Respostas</title>
+  <link rel="stylesheet" href="css/style.css">
+  <style>
+    .navbar {
+      position: sticky; top: 0; z-index: 100;
+      background: rgba(15,15,26,0.9); backdrop-filter: blur(20px);
+      border-bottom: 1px solid var(--border);
+      padding: 0 32px; height: 64px;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .navbar-left { display: flex; align-items: center; gap: 14px; }
+    .back-btn {
+      width: 34px; height: 34px; border-radius: 8px;
+      background: var(--bg-card); border: 1px solid var(--border);
+      color: var(--text-secondary); display: flex; align-items: center;
+      justify-content: center; text-decoration: none; transition: var(--transition);
+    }
+    .back-btn:hover { color: #fff; border-color: var(--text-muted); }
+    .navbar-left h1 { font-size: 16px; font-weight: 700; color: var(--text-primary); }
+
+    .container { max-width: 1100px; margin: 0 auto; padding: 32px; }
+
+    .tabs { display: flex; gap: 4px; margin-bottom: 28px; }
+    .tab { padding: 8px 18px; border-radius: 7px; font-size: 13px; font-weight: 600; color: var(--text-muted); background: none; cursor: pointer; }
+    .tab:hover { color: var(--text-secondary); background: var(--bg-card); }
+    .tab.active { color: #fff; background: var(--primary); }
+
+    .summary-stats {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 14px; margin-bottom: 28px;
+    }
+    .summary-stat {
+      background: var(--bg-card); border: 1px solid var(--border);
+      border-radius: var(--radius-lg); padding: 18px;
+    }
+    .summary-stat .label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.8px; font-weight: 600; }
+    .summary-stat .value { font-size: 26px; font-weight: 800; margin-top: 6px; color: var(--primary); }
+    .summary-stat .value-sm { font-size: 14px; font-weight: 700; margin-top: 8px; color: var(--text-secondary); }
+
+    .summary-card {
+      background: var(--bg-card); border: 1px solid var(--border);
+      border-radius: var(--radius-lg); padding: 22px; margin-bottom: 14px;
+    }
+    .summary-card h3 { font-size: 15px; font-weight: 700; margin-bottom: 3px; }
+    .summary-card .field-type { font-size: 11px; color: var(--text-muted); margin-bottom: 16px; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; }
+
+    .bar-chart { display: flex; flex-direction: column; gap: 8px; }
+    .bar-row { display: flex; align-items: center; gap: 10px; }
+    .bar-label { width: 130px; font-size: 12px; color: var(--text-secondary); text-align: right; flex-shrink: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .bar-track { flex: 1; height: 26px; background: rgba(255,255,255,0.04); border-radius: 5px; overflow: hidden; }
+    .bar-fill { height: 100%; background: var(--primary); border-radius: 5px; transition: width 0.6s cubic-bezier(0.4,0,0.2,1); display: flex; align-items: center; padding-left: 10px; min-width: 0; }
+    .bar-fill span { font-size: 11px; font-weight: 700; color: #fff; white-space: nowrap; }
+    .bar-count { width: 40px; font-size: 12px; color: var(--text-muted); flex-shrink: 0; text-align: right; }
+
+    .text-responses { display: flex; flex-direction: column; gap: 6px; }
+    .text-response {
+      padding: 10px 14px; background: rgba(255,255,255,0.02);
+      border: 1px solid var(--border); border-radius: 7px;
+      font-size: 13px; color: var(--text-secondary); line-height: 1.5;
+    }
+
+    .stat-row { display: flex; gap: 28px; margin-top: 8px; }
+    .stat-row div .lbl { font-size: 10px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; }
+    .stat-row div .val { font-size: 20px; font-weight: 800; color: var(--primary); margin-top: 2px; }
+
+    .avg-display { display: flex; align-items: baseline; gap: 8px; }
+    .avg-display .big { font-size: 40px; font-weight: 800; color: var(--primary); line-height: 1; }
+    .avg-display .sub { font-size: 13px; color: var(--text-muted); }
+
+    .responses-table-wrapper { overflow-x: auto; border-radius: var(--radius-lg); border: 1px solid var(--border); }
+    .responses-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .responses-table th {
+      text-align: left; padding: 11px 14px;
+      background: var(--bg-card); border-bottom: 1px solid var(--border);
+      font-weight: 600; color: var(--text-muted); text-transform: uppercase;
+      font-size: 10px; letter-spacing: 0.8px; white-space: nowrap;
+    }
+    .responses-table td {
+      padding: 11px 14px; border-bottom: 1px solid var(--border);
+      color: var(--text-secondary); max-width: 200px;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .responses-table tr:last-child td { border-bottom: none; }
+    .responses-table tr:hover td { background: rgba(255,255,255,0.015); }
+
+    .empty-state { text-align: center; padding: 80px 20px; }
+    .empty-state svg { opacity: 0.15; margin-bottom: 16px; }
+    .empty-state h3 { font-size: 18px; font-weight: 700; margin-bottom: 8px; }
+    .empty-state p { color: var(--text-secondary); font-size: 14px; margin-bottom: 24px; }
+
+    @media (max-width: 768px) {
+      .navbar { padding: 0 16px; }
+      .container { padding: 20px 16px; }
+      .bar-label { width: 80px; }
+    }
+  </style>
+</head>
+<body>
+
+  <nav class="navbar">
+    <div class="navbar-left">
+      <a href="index.html" class="back-btn">
+        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="9 2 3 7 9 12"/></svg>
+      </a>
+      <h1 id="formTitle">Respostas</h1>
+    </div>
+    <div class="flex items-center gap-8">
+      <button class="btn btn-secondary btn-sm" onclick="exportCSV()">
+        <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 13H2a1 1 0 01-1-1V2a1 1 0 011-1h6l4 4v8a1 1 0 01-1 1h-2"/><polyline points="7 1 7 5 11 5"/><line x1="7" y1="9" x2="7" y2="14"/><polyline points="5 12 7 14 9 12"/></svg>
+        Exportar CSV
+      </button>
+      <button class="btn btn-ghost btn-sm" onclick="copyShareLink()">
+        <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 8a3 3 0 004.5.4l2-2a3 3 0 00-4.2-4.2L6 3.5"/><path d="M8 5a3 3 0 00-4.5-.4l-2 2a3 3 0 004.2 4.2L7 9.5"/></svg>
+        Compartilhar
+      </button>
+    </div>
+  </nav>
+
+  <div class="container">
+    <div class="summary-stats animate-slideUp" id="summaryStats"></div>
+    <div class="tabs animate-slideUp" style="animation-delay:0.08s">
+      <button class="tab active" data-view="summary" onclick="switchView('summary')">Resumo</button>
+      <button class="tab" data-view="individual" onclick="switchView('individual')">Respostas</button>
+    </div>
+    <div id="content" class="animate-slideUp" style="animation-delay:0.14s"></div>
+  </div>
+
+  <div class="toast-container" id="toastContainer"></div>
+
+  <script src="js/storage.js"></script>
+  <script>
+    let form = null, responses = [], currentView = 'summary';
+
+    function init() {
+      const id = new URLSearchParams(window.location.search).get('id');
+      if (!id) return;
+      form = Storage.getForm(id);
+      if (!form) return;
+      responses = Storage.getResponses(id);
+      document.getElementById('formTitle').textContent = form.title;
+      document.title = form.title + ' — Respostas';
+      renderStats();
+      renderContent();
+    }
+
+    function renderStats() {
+      const fields = form.fields.filter(f => !['welcome','statement','thank_you'].includes(f.type));
+      const count = responses.length;
+      let answered = 0;
+      responses.forEach(r => fields.forEach(f => {
+        const v = r.answers?.[f.id]?.value;
+        if (v !== null && v !== undefined && v !== '' && (!Array.isArray(v) || v.length > 0)) answered++;
+      }));
+      const completionRate = count > 0 && fields.length > 0 ? Math.round((answered / (count * fields.length)) * 100) : 0;
+      const lastDate = count > 0 ? new Date(responses[count-1].submittedAt).toLocaleDateString('pt-BR', {day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}) : '—';
+
+      document.getElementById('summaryStats').innerHTML = `
+        <div class="summary-stat"><div class="label">Respostas</div><div class="value">${count}</div></div>
+        <div class="summary-stat"><div class="label">Preenchimento</div><div class="value">${completionRate}%</div></div>
+        <div class="summary-stat"><div class="label">Perguntas</div><div class="value">${fields.length}</div></div>
+        <div class="summary-stat"><div class="label">Última resposta</div><div class="value-sm">${lastDate}</div></div>
+      `;
+    }
+
+    function switchView(view) {
+      currentView = view;
+      document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.view === view));
+      renderContent();
+    }
+
+    function renderContent() {
+      const el = document.getElementById('content');
+      if (responses.length === 0) {
+        el.innerHTML = `<div class="empty-state">
+          <svg width="64" height="64" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+            <path d="M8 56V16l12-8h36v48H8z"/><line x1="18" y1="28" x2="46" y2="28"/><line x1="18" y1="36" x2="46" y2="36"/><line x1="18" y1="44" x2="32" y2="44"/>
+          </svg>
+          <h3>Nenhuma resposta ainda</h3>
+          <p>Compartilhe o formulário para começar a receber respostas</p>
+          <button class="btn btn-primary" onclick="copyShareLink()">Copiar link</button>
+        </div>`;
+        return;
+      }
+      currentView === 'summary' ? renderSummary(el) : renderIndividual(el);
+    }
+
+    function renderSummary(el) {
+      const fields = form.fields.filter(f => !['welcome','statement','thank_you'].includes(f.type));
+      const typeLabels = {
+        short_text:'Texto curto', long_text:'Texto longo', email:'E-mail', phone:'Telefone',
+        number:'Número', url:'URL', multiple_choice:'Múltipla escolha', checkbox:'Caixas de seleção',
+        dropdown:'Lista suspensa', yes_no:'Sim / Não', rating:'Estrelas',
+        opinion_scale:'Escala de opinião', date:'Data', file_upload:'Upload'
+      };
+
+      let html = '';
+      fields.forEach(field => {
+        const values = responses.map(r => r.answers?.[f => f]?.[field.id]?.value).filter(Boolean);
+        // Fix: correctly get values
+        const vals = responses.map(r => r.answers?.[field.id]?.value).filter(v => v !== null && v !== undefined && v !== '');
+
+        html += `<div class="summary-card"><h3>${esc(field.title)}</h3><div class="field-type">${typeLabels[field.type]||field.type} · ${vals.length} respostas</div>`;
+
+        if (['multiple_choice','checkbox','dropdown','yes_no','picture_choice'].includes(field.type)) {
+          const counts = {};
+          vals.forEach(v => {
+            if (Array.isArray(v)) v.forEach(i => { counts[i] = (counts[i]||0)+1; });
+            else counts[v] = (counts[v]||0)+1;
+          });
+          const max = Math.max(...Object.values(counts), 1);
+          html += `<div class="bar-chart">`;
+          Object.entries(counts).sort((a,b)=>b[1]-a[1]).forEach(([label, count]) => {
+            const pct = (count / max) * 100;
+            const totalPct = responses.length > 0 ? Math.round((count / responses.length) * 100) : 0;
+            html += `<div class="bar-row">
+              <div class="bar-label" title="${esc(label)}">${esc(label)}</div>
+              <div class="bar-track"><div class="bar-fill" style="width:${pct}%"><span>${totalPct}%</span></div></div>
+              <div class="bar-count">${count}</div>
+            </div>`;
+          });
+          html += `</div>`;
+
+        } else if (field.type === 'rating') {
+          const avg = vals.length > 0 ? vals.reduce((a,b)=>a+Number(b),0)/vals.length : 0;
+          const maxR = field.maxRating||5;
+          html += `<div class="avg-display"><span class="big">${avg.toFixed(1)}</span><span class="sub">/ ${maxR} · ${vals.length} avaliações</span></div>`;
+          html += `<div class="bar-chart" style="margin-top:14px;">`;
+          for (let i = maxR; i >= 1; i--) {
+            const c = vals.filter(v=>Number(v)===i).length;
+            const pct = vals.length>0 ? (c/vals.length)*100 : 0;
+            html += `<div class="bar-row"><div class="bar-label">${'★'.repeat(i)}</div><div class="bar-track"><div class="bar-fill" style="width:${pct}%"><span>${c}</span></div></div><div class="bar-count">${Math.round(pct)}%</div></div>`;
+          }
+          html += `</div>`;
+
+        } else if (field.type === 'opinion_scale') {
+          const avg = vals.length>0 ? vals.reduce((a,b)=>a+Number(b),0)/vals.length : 0;
+          const min = field.minValue||0, max = field.maxValue||10;
+          html += `<div class="avg-display"><span class="big">${avg.toFixed(1)}</span><span class="sub">média · ${vals.length} respostas</span></div>`;
+          html += `<div class="bar-chart" style="margin-top:14px;">`;
+          for (let i = min; i <= max; i++) {
+            const c = vals.filter(v=>Number(v)===i).length;
+            const pct = vals.length>0 ? (c/vals.length)*100 : 0;
+            html += `<div class="bar-row"><div class="bar-label">${i}</div><div class="bar-track"><div class="bar-fill" style="width:${pct}%"><span>${c}</span></div></div><div class="bar-count">${Math.round(pct)}%</div></div>`;
+          }
+          html += `</div>`;
+
+        } else if (field.type === 'number') {
+          const nums = vals.map(Number).filter(n=>!isNaN(n));
+          if (nums.length > 0) {
+            const avg = nums.reduce((a,b)=>a+b,0)/nums.length;
+            html += `<div class="stat-row">
+              <div><div class="lbl">Média</div><div class="val">${avg.toFixed(1)}</div></div>
+              <div><div class="lbl">Mínimo</div><div class="val">${Math.min(...nums)}</div></div>
+              <div><div class="lbl">Máximo</div><div class="val">${Math.max(...nums)}</div></div>
+            </div>`;
+          }
+        } else {
+          html += `<div class="text-responses">`;
+          vals.slice(-8).forEach(v => { html += `<div class="text-response">${esc(String(v))}</div>`; });
+          if (vals.length > 8) html += `<div style="font-size:12px;color:var(--text-muted);margin-top:4px;">+ ${vals.length-8} respostas</div>`;
+          html += `</div>`;
+        }
+
+        html += `</div>`;
+      });
+
+      el.innerHTML = html || '<p style="color:var(--text-muted);font-size:14px;">Nenhuma pergunta encontrada.</p>';
+    }
+
+    function renderIndividual(el) {
+      const fields = form.fields.filter(f => !['welcome','statement','thank_you'].includes(f.type));
+      let html = `<div class="responses-table-wrapper"><table class="responses-table"><thead><tr><th>#</th><th>Data</th>`;
+      fields.forEach(f => { html += `<th>${esc(f.title)}</th>`; });
+      html += `</tr></thead><tbody>`;
+      [...responses].reverse().forEach((r, i) => {
+        const date = new Date(r.submittedAt).toLocaleDateString('pt-BR', {day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'});
+        html += `<tr><td>${responses.length - i}</td><td>${date}</td>`;
+        fields.forEach(f => {
+          let val = r.answers?.[f.id]?.value;
+          if (val === null || val === undefined) val = '—';
+          else if (Array.isArray(val)) val = val.join(', ');
+          html += `<td title="${esc(String(val))}">${esc(String(val))}</td>`;
+        });
+        html += `</tr>`;
+      });
+      html += `</tbody></table></div>`;
+      el.innerHTML = html;
+    }
+
+    function exportCSV() {
+      if (responses.length === 0) return showToast('Sem respostas para exportar', 'error');
+      const fields = form.fields.filter(f => !['welcome','statement','thank_you'].includes(f.type));
+      const headers = ['Data', ...fields.map(f => f.title)];
+      const rows = responses.map(r => {
+        const date = new Date(r.submittedAt).toLocaleString('pt-BR');
+        return [date, ...fields.map(f => {
+          const v = r.answers?.[f.id]?.value;
+          if (v === null || v === undefined) return '';
+          if (Array.isArray(v)) return v.join('; ');
+          return String(v);
+        })];
+      });
+      let csv = '\uFEFF';
+      csv += headers.map(h => `"${h.replace(/"/g,'""')}"`).join(',') + '\n';
+      rows.forEach(row => { csv += row.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',') + '\n'; });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(new Blob([csv], {type:'text/csv;charset=utf-8;'}));
+      a.download = `${form.title.replace(/[^a-zA-Z0-9]/g,'_')}_respostas.csv`;
+      a.click();
+      showToast('CSV exportado', 'success');
+    }
+
+    function copyShareLink() {
+      const url = new URL('view.html', window.location.href);
+      url.searchParams.set('id', form.id);
+      navigator.clipboard.writeText(url.toString())
+        .then(() => showToast('Link copiado', 'success'))
+        .catch(() => prompt('Copie o link:', url.toString()));
+    }
+
+    function showToast(msg, type='info') {
+      const c = document.getElementById('toastContainer');
+      const t = document.createElement('div');
+      t.className = `toast toast-${type}`; t.textContent = msg;
+      c.appendChild(t); setTimeout(() => t.remove(), 3000);
+    }
+    function esc(str) { const d = document.createElement('div'); d.textContent = str||''; return d.innerHTML; }
+
+    init();
+  </script>
+</body>
+</html>

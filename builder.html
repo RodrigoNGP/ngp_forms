@@ -1,0 +1,686 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NGP Forms — Builder</title>
+  <link rel="stylesheet" href="css/style.css">
+  <style>
+    body { overflow: hidden; height: 100vh; display: flex; flex-direction: column; }
+
+    .topbar {
+      height: 56px;
+      background: rgba(15,15,26,0.97);
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 16px; flex-shrink: 0; z-index: 100;
+    }
+    .topbar-left { display: flex; align-items: center; gap: 10px; }
+    .back-btn {
+      width: 34px; height: 34px; border-radius: 8px;
+      background: var(--bg-card); border: 1px solid var(--border);
+      color: var(--text-secondary); display: flex; align-items: center;
+      justify-content: center; text-decoration: none; transition: var(--transition);
+    }
+    .back-btn:hover { color: #fff; border-color: var(--text-muted); text-decoration: none; }
+    .topbar-title {
+      background: none; border: none; color: var(--text-primary);
+      font-size: 14px; font-weight: 600; padding: 6px 10px;
+      border-radius: 6px; min-width: 180px; font-family: inherit;
+    }
+    .topbar-title:hover { background: var(--bg-card); }
+    .topbar-title:focus { background: var(--bg-card); outline: 2px solid var(--primary); }
+
+    .topbar-center { display: flex; gap: 2px; }
+    .tab-btn {
+      padding: 7px 14px; border-radius: 7px; font-size: 13px;
+      font-weight: 600; color: var(--text-muted); background: none; cursor: pointer;
+    }
+    .tab-btn:hover { color: var(--text-secondary); background: var(--bg-card); }
+    .tab-btn.active { color: #fff; background: var(--primary); }
+
+    .topbar-right { display: flex; align-items: center; gap: 6px; }
+
+    /* Layout */
+    .builder-layout { display: flex; flex: 1; overflow: hidden; }
+
+    /* Left Sidebar */
+    .sidebar-left {
+      width: 240px; background: var(--bg-dark);
+      border-right: 1px solid var(--border);
+      overflow-y: auto; flex-shrink: 0; padding: 12px;
+    }
+    .sidebar-section { margin-bottom: 16px; }
+    .sidebar-section h4 {
+      font-size: 10px; text-transform: uppercase; letter-spacing: 1px;
+      color: var(--text-muted); margin-bottom: 6px; padding: 0 6px; font-weight: 700;
+    }
+    .field-type-btn {
+      display: flex; align-items: center; gap: 9px; width: 100%;
+      padding: 8px 10px; border-radius: 7px; background: none;
+      color: var(--text-secondary); font-size: 13px; font-weight: 500;
+      text-align: left; border: 1px solid transparent; transition: var(--transition);
+    }
+    .field-type-btn:hover { background: var(--bg-card); color: var(--text-primary); border-color: var(--border); }
+    .field-type-btn .ficon {
+      width: 28px; height: 28px; border-radius: 7px; background: var(--bg-card);
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0; color: var(--text-muted); transition: var(--transition);
+    }
+    .field-type-btn:hover .ficon { color: var(--primary); background: var(--primary-light); }
+
+    /* Canvas */
+    .canvas { flex: 1; overflow-y: auto; padding: 32px; display: flex; flex-direction: column; align-items: center; }
+    .canvas-inner { width: 100%; max-width: 660px; }
+    .fields-list { display: flex; flex-direction: column; gap: 10px; min-height: 200px; }
+
+    .field-item {
+      background: var(--bg-card); border: 1px solid var(--border);
+      border-radius: var(--radius-md); padding: 16px; cursor: pointer;
+      transition: var(--transition); position: relative;
+    }
+    .field-item:hover { border-color: var(--text-muted); }
+    .field-item.active { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(108,92,231,0.1); }
+    .field-item.dragging { opacity: 0.4; }
+    .field-item.drag-over { border-top: 2px solid var(--primary); }
+
+    .field-item-header { display: flex; align-items: center; gap: 10px; }
+    .field-drag-handle { cursor: grab; color: var(--text-muted); padding: 4px; user-select: none; }
+    .field-drag-handle:active { cursor: grabbing; }
+    .field-number {
+      width: 24px; height: 24px; border-radius: 6px;
+      background: var(--primary-light); color: var(--primary);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 11px; font-weight: 700; flex-shrink: 0;
+    }
+    .field-item-content { flex: 1; min-width: 0; }
+    .field-item-title { font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .field-item-type { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+
+    .field-item-actions { display: flex; gap: 2px; opacity: 0; transition: var(--transition); }
+    .field-item:hover .field-item-actions { opacity: 1; }
+    .field-item-actions button {
+      width: 26px; height: 26px; border-radius: 6px; background: none;
+      color: var(--text-muted); display: flex; align-items: center; justify-content: center;
+    }
+    .field-item-actions button:hover { background: var(--bg-dark); color: var(--text-primary); }
+    .field-item-actions button.delete:hover { color: var(--danger); }
+
+    .empty-canvas { text-align: center; padding: 80px 20px; color: var(--text-muted); }
+    .empty-canvas svg { opacity: 0.15; margin-bottom: 16px; }
+    .empty-canvas h3 { font-size: 16px; color: var(--text-secondary); margin-bottom: 6px; }
+    .empty-canvas p { font-size: 13px; }
+
+    /* Right Sidebar */
+    .sidebar-right {
+      width: 300px; background: var(--bg-dark);
+      border-left: 1px solid var(--border);
+      overflow-y: auto; flex-shrink: 0; padding: 18px;
+    }
+    .settings-title { font-size: 13px; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 16px; }
+
+    .settings-group { margin-bottom: 18px; }
+    .settings-group label { display: block; font-size: 11px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 7px; }
+    .settings-group .input { font-size: 13px; padding: 9px 12px; }
+
+    .toggle-row { display: flex; align-items: center; justify-content: space-between; padding: 9px 0; border-bottom: 1px solid var(--border); }
+    .toggle-row span { font-size: 13px; color: var(--text-secondary); }
+    .toggle { position: relative; width: 38px; height: 22px; cursor: pointer; }
+    .toggle input { opacity: 0; width: 0; height: 0; }
+    .toggle .slider { position: absolute; inset: 0; background: var(--border); border-radius: 11px; transition: var(--transition); }
+    .toggle .slider::before { content: ''; position: absolute; width: 16px; height: 16px; bottom: 3px; left: 3px; background: #fff; border-radius: 50%; transition: var(--transition); }
+    .toggle input:checked + .slider { background: var(--primary); }
+    .toggle input:checked + .slider::before { transform: translateX(16px); }
+
+    .options-list { display: flex; flex-direction: column; gap: 6px; }
+    .option-row { display: flex; align-items: center; gap: 6px; }
+    .option-row input { flex: 1; padding: 7px 10px; background: var(--bg-input); border: 1px solid var(--border); border-radius: 6px; color: var(--text-primary); font-size: 13px; font-family: inherit; }
+    .option-row input:focus { border-color: var(--primary); outline: none; }
+    .option-row button { width: 26px; height: 26px; border-radius: 6px; background: none; color: var(--text-muted); display: flex; align-items: center; justify-content: center; }
+    .option-row button:hover { color: var(--danger); background: rgba(255,82,82,0.08); }
+    .add-option-btn { display: flex; align-items: center; gap: 6px; padding: 7px 10px; border-radius: 6px; background: none; color: var(--primary); font-size: 12px; font-weight: 600; margin-top: 4px; }
+    .add-option-btn:hover { background: var(--primary-light); }
+
+    .theme-panel { display: none; }
+    .theme-panel.active { display: block; }
+    .settings-panel { display: none; }
+    .settings-panel.active { display: block; }
+
+    .color-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+    .color-row input[type="color"] { width: 38px; height: 38px; border: 1px solid var(--border); border-radius: 8px; cursor: pointer; background: none; padding: 3px; }
+    .color-row span { font-size: 13px; color: var(--text-secondary); }
+
+    .preview-overlay { position: fixed; inset: 0; background: var(--bg-dark); z-index: 1000; display: none; }
+    .preview-overlay.active { display: flex; flex-direction: column; }
+    .preview-topbar { height: 48px; background: rgba(15,15,26,0.97); border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; padding: 0 20px; }
+    .preview-frame { flex: 1; border: none; width: 100%; }
+
+    @media (max-width: 1024px) { .sidebar-left { width: 200px; } .sidebar-right { width: 260px; } }
+    @media (max-width: 768px) { .sidebar-left, .sidebar-right { display: none; } .canvas { padding: 20px; } }
+  </style>
+</head>
+<body>
+
+  <div class="topbar">
+    <div class="topbar-left">
+      <a href="index.html" class="back-btn">
+        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="9 2 3 7 9 12"/></svg>
+      </a>
+      <input type="text" class="topbar-title" id="formTitle" value="Formulário sem título" spellcheck="false">
+    </div>
+    <div class="topbar-center">
+      <button class="tab-btn active" data-tab="build" onclick="switchTab('build')">Construir</button>
+      <button class="tab-btn" data-tab="theme" onclick="switchTab('theme')">Tema</button>
+      <button class="tab-btn" data-tab="settings" onclick="switchTab('settings')">Configurações</button>
+    </div>
+    <div class="topbar-right">
+      <button class="btn btn-ghost btn-sm" onclick="previewForm()">
+        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M1 7s2.5-5 6-5 6 5 6 5-2.5 5-6 5-6-5-6-5z"/><circle cx="7" cy="7" r="2"/></svg>
+        Preview
+      </button>
+      <button class="btn btn-secondary btn-sm" id="publishBtn" onclick="togglePublish()">Publicar</button>
+      <button class="btn btn-primary btn-sm" onclick="saveForm()">Salvar</button>
+    </div>
+  </div>
+
+  <div class="builder-layout">
+
+    <!-- Left Sidebar -->
+    <div class="sidebar-left" id="sidebarLeft">
+      <div class="sidebar-section">
+        <h4>Texto</h4>
+        <button class="field-type-btn" onclick="addField('short_text')">
+          <span class="ficon"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="2" y1="7" x2="12" y2="7"/><line x1="2" y1="4" x2="9" y2="4"/><line x1="2" y1="10" x2="7" y2="10"/></svg></span>
+          Texto curto
+        </button>
+        <button class="field-type-btn" onclick="addField('long_text')">
+          <span class="ficon"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="2" y1="3" x2="12" y2="3"/><line x1="2" y1="6" x2="12" y2="6"/><line x1="2" y1="9" x2="12" y2="9"/><line x1="2" y1="12" x2="8" y2="12"/></svg></span>
+          Texto longo
+        </button>
+        <button class="field-type-btn" onclick="addField('email')">
+          <span class="ficon"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="1" y="3" width="12" height="8" rx="1"/><polyline points="1 3 7 8 13 3"/></svg></span>
+          E-mail
+        </button>
+        <button class="field-type-btn" onclick="addField('phone')">
+          <span class="ficon"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="1" width="8" height="12" rx="2"/><line x1="7" y1="10" x2="7" y2="10"/></svg></span>
+          Telefone
+        </button>
+        <button class="field-type-btn" onclick="addField('number')">
+          <span class="ficon"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="7" y1="1" x2="7" y2="13"/><line x1="3" y1="5" x2="11" y2="5"/><line x1="3" y1="9" x2="11" y2="9"/></svg></span>
+          Número
+        </button>
+        <button class="field-type-btn" onclick="addField('url')">
+          <span class="ficon"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 8a3 3 0 004.2.4l2-2a3 3 0 00-4.2-4.2L6.5 3.5"/><path d="M8 6a3 3 0 00-4.2-.4l-2 2a3 3 0 004.2 4.2L7.5 10.5"/></svg></span>
+          URL
+        </button>
+      </div>
+
+      <div class="sidebar-section">
+        <h4>Escolha</h4>
+        <button class="field-type-btn" onclick="addField('multiple_choice')">
+          <span class="ficon"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="7" cy="7" r="5"/><circle cx="7" cy="7" r="2" fill="currentColor" stroke="none"/></svg></span>
+          Múltipla escolha
+        </button>
+        <button class="field-type-btn" onclick="addField('checkbox')">
+          <span class="ficon"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="2" y="2" width="10" height="10" rx="2"/><polyline points="4.5 7 6.5 9 9.5 5"/></svg></span>
+          Caixas de seleção
+        </button>
+        <button class="field-type-btn" onclick="addField('dropdown')">
+          <span class="ficon"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="1" y="3" width="12" height="8" rx="1"/><polyline points="4 6 7 9 10 6"/></svg></span>
+          Lista suspensa
+        </button>
+        <button class="field-type-btn" onclick="addField('yes_no')">
+          <span class="ficon"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="5" cy="7" r="3"/><circle cx="9" cy="7" r="3"/></svg></span>
+          Sim / Não
+        </button>
+      </div>
+
+      <div class="sidebar-section">
+        <h4>Avaliação</h4>
+        <button class="field-type-btn" onclick="addField('rating')">
+          <span class="ficon"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="7 1 8.8 5.5 13.6 5.9 10 9 11.1 13.6 7 11 2.9 13.6 4 9 0.4 5.9 5.2 5.5"/></svg></span>
+          Estrelas
+        </button>
+        <button class="field-type-btn" onclick="addField('opinion_scale')">
+          <span class="ficon"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="1" y="8" width="3" height="5"/><rect x="6" y="5" width="3" height="8"/><rect x="11" y="2" width="3" height="11"/></svg></span>
+          Escala de opinião
+        </button>
+      </div>
+
+      <div class="sidebar-section">
+        <h4>Outros</h4>
+        <button class="field-type-btn" onclick="addField('date')">
+          <span class="ficon"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="1" y="2" width="12" height="11" rx="1"/><line x1="1" y1="6" x2="13" y2="6"/><line x1="4" y1="1" x2="4" y2="3"/><line x1="10" y1="1" x2="10" y2="3"/></svg></span>
+          Data
+        </button>
+        <button class="field-type-btn" onclick="addField('file_upload')">
+          <span class="ficon"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 13H2a1 1 0 01-1-1V2a1 1 0 011-1h6l4 4v2"/><polyline points="7 1 7 5 11 5"/><line x1="9" y1="10" x2="9" y2="14"/><polyline points="7 12 9 14 11 12"/></svg></span>
+          Upload de arquivo
+        </button>
+        <button class="field-type-btn" onclick="addField('welcome')">
+          <span class="ficon"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="7" cy="7" r="6"/><line x1="7" y1="10" x2="7" y2="7"/><line x1="7" y1="4" x2="7" y2="4.5"/></svg></span>
+          Boas-vindas
+        </button>
+        <button class="field-type-btn" onclick="addField('statement')">
+          <span class="ficon"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 2H2a1 1 0 00-1 1v7a1 1 0 001 1h3l2 2 2-2h3a1 1 0 001-1V3a1 1 0 00-1-1z"/></svg></span>
+          Declaração
+        </button>
+      </div>
+    </div>
+
+    <!-- Canvas -->
+    <div class="canvas" id="canvas">
+      <div class="canvas-inner">
+        <div class="fields-list" id="fieldsList"></div>
+      </div>
+    </div>
+
+    <!-- Right Sidebar -->
+    <div class="sidebar-right" id="sidebarRight">
+      <div id="buildSettings">
+        <div id="noFieldSelected" style="text-align:center; padding:48px 0; color:var(--text-muted);">
+          <svg width="40" height="40" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" style="opacity:0.2; margin-bottom:12px;"><rect x="4" y="4" width="32" height="32" rx="3"/><line x1="10" y1="14" x2="30" y2="14"/><line x1="10" y1="20" x2="30" y2="20"/><line x1="10" y1="26" x2="22" y2="26"/></svg>
+          <p style="font-size:13px;">Selecione um campo para editar</p>
+        </div>
+        <div id="fieldSettings" style="display:none;"></div>
+      </div>
+
+      <!-- Theme -->
+      <div class="theme-panel" id="themePanel">
+        <div class="settings-title">Tema</div>
+        <div class="settings-group">
+          <label>Cor principal</label>
+          <div class="color-row">
+            <input type="color" id="themePrimary" value="#6C5CE7">
+            <span>Botões e destaques</span>
+          </div>
+        </div>
+        <div class="settings-group">
+          <label>Cor de fundo</label>
+          <div class="color-row">
+            <input type="color" id="themeBg" value="#1a1a2e">
+            <span>Fundo do formulário</span>
+          </div>
+        </div>
+        <div class="settings-group">
+          <label>Cor do texto</label>
+          <div class="color-row">
+            <input type="color" id="themeText" value="#ffffff">
+            <span>Texto principal</span>
+          </div>
+        </div>
+        <div class="settings-group">
+          <label>Fonte</label>
+          <select class="input" id="themeFont">
+            <option value="Inter">Inter</option>
+            <option value="Georgia">Georgia</option>
+            <option value="Arial">Arial</option>
+            <option value="Courier New">Courier New</option>
+          </select>
+        </div>
+        <div class="settings-group">
+          <label>Imagem de fundo (URL)</label>
+          <input type="text" class="input" id="themeBgImage" placeholder="https://...">
+        </div>
+      </div>
+
+      <!-- Settings -->
+      <div class="settings-panel" id="settingsPanel">
+        <div class="settings-title">Configurações</div>
+        <div class="settings-group">
+          <div class="toggle-row">
+            <span>Barra de progresso</span>
+            <label class="toggle"><input type="checkbox" id="settingProgressBar" checked><span class="slider"></span></label>
+          </div>
+          <div class="toggle-row">
+            <span>Numerar perguntas</span>
+            <label class="toggle"><input type="checkbox" id="settingNumbers" checked><span class="slider"></span></label>
+          </div>
+        </div>
+        <div class="settings-group">
+          <label>Texto do botão enviar</label>
+          <input type="text" class="input" id="settingSubmitText" value="Enviar">
+        </div>
+        <div class="settings-group">
+          <label>Título de agradecimento</label>
+          <input type="text" class="input" id="settingThankTitle" value="Obrigado!">
+        </div>
+        <div class="settings-group">
+          <label>Mensagem de agradecimento</label>
+          <textarea class="input" id="settingThankMsg" rows="3">Suas respostas foram enviadas com sucesso.</textarea>
+        </div>
+        <div class="settings-group">
+          <label>Redirecionar para (opcional)</label>
+          <input type="text" class="input" id="settingRedirectUrl" placeholder="https://...">
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Preview Overlay -->
+  <div class="preview-overlay" id="previewOverlay">
+    <div class="preview-topbar">
+      <span style="font-size:14px; font-weight:600;">Preview</span>
+      <button class="btn btn-ghost btn-sm" onclick="closePreview()">Fechar</button>
+    </div>
+    <iframe class="preview-frame" id="previewFrame"></iframe>
+  </div>
+
+  <div class="toast-container" id="toastContainer"></div>
+
+  <script src="js/storage.js"></script>
+  <script>
+    let form = null;
+    let selectedFieldId = null;
+    let currentTab = 'build';
+    let dragSrcIndex = null;
+
+    const typeLabels = {
+      short_text:'Texto curto', long_text:'Texto longo', email:'E-mail', phone:'Telefone',
+      number:'Número', url:'URL', multiple_choice:'Múltipla escolha', checkbox:'Caixas de seleção',
+      dropdown:'Lista suspensa', yes_no:'Sim / Não', rating:'Estrelas',
+      opinion_scale:'Escala de opinião', date:'Data', file_upload:'Upload de arquivo',
+      welcome:'Boas-vindas', statement:'Declaração', picture_choice:'Escolha com imagem'
+    };
+
+    function init() {
+      const params = new URLSearchParams(window.location.search);
+      const id = params.get('id');
+      if (id) form = Storage.getForm(id);
+      if (!form) {
+        form = Storage.createBlankForm();
+        Storage.saveForm(form);
+        history.replaceState(null, '', `builder.html?id=${form.id}`);
+      }
+      document.getElementById('formTitle').value = form.title;
+      loadThemeSettings();
+      loadFormSettings();
+      updatePublishBtn();
+      renderFields();
+    }
+
+    function switchTab(tab) {
+      currentTab = tab;
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+      document.getElementById('buildSettings').style.display = tab === 'build' ? 'block' : 'none';
+      document.getElementById('themePanel').classList.toggle('active', tab === 'theme');
+      document.getElementById('settingsPanel').classList.toggle('active', tab === 'settings');
+    }
+
+    function renderFields() {
+      const list = document.getElementById('fieldsList');
+      if (form.fields.length === 0) {
+        list.innerHTML = `
+          <div class="empty-canvas">
+            <svg width="64" height="64" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><rect x="8" y="8" width="48" height="48" rx="5"/><line x1="18" y1="22" x2="46" y2="22"/><line x1="18" y1="32" x2="46" y2="32"/><line x1="18" y1="42" x2="34" y2="42"/></svg>
+            <h3>Comece a construir</h3>
+            <p>Clique em um tipo de campo na barra lateral para adicionar</p>
+          </div>`;
+        return;
+      }
+
+      let qNum = 0;
+      const dragIcon = `<svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><circle cx="5" cy="4" r="1" fill="currentColor"/><circle cx="9" cy="4" r="1" fill="currentColor"/><circle cx="5" cy="8" r="1" fill="currentColor"/><circle cx="9" cy="8" r="1" fill="currentColor"/><circle cx="5" cy="12" r="1" fill="currentColor"/><circle cx="9" cy="12" r="1" fill="currentColor"/></svg>`;
+      const copyIcon = `<svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="8" height="8" rx="1"/><path d="M7 3V1H1v6h2"/></svg>`;
+      const upIcon = `<svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="2 8 6 4 10 8"/></svg>`;
+      const downIcon = `<svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="2 4 6 8 10 4"/></svg>`;
+      const trashIcon = `<svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="1 3 11 3"/><path d="M9 3V1H3v2"/><path d="M9 3l-.7 8H3.7L3 3"/></svg>`;
+
+      list.innerHTML = form.fields.map((field, idx) => {
+        const isQ = !['welcome','statement','thank_you'].includes(field.type);
+        if (isQ) qNum++;
+        return `
+          <div class="field-item ${field.id === selectedFieldId ? 'active' : ''}"
+               data-id="${field.id}" data-index="${idx}" draggable="true"
+               onclick="selectField('${field.id}')"
+               ondragstart="onDragStart(event,${idx})" ondragover="onDragOver(event,${idx})"
+               ondragleave="onDragLeave(event)" ondrop="onDrop(event,${idx})" ondragend="onDragEnd(event)">
+            <div class="field-item-header">
+              <span class="field-drag-handle">${dragIcon}</span>
+              ${isQ ? `<span class="field-number">${qNum}</span>` : ''}
+              <div class="field-item-content">
+                <div class="field-item-title">${esc(field.title || 'Sem título')}</div>
+                <div class="field-item-type">${typeLabels[field.type] || field.type}${field.required ? ' · Obrigatório' : ''}</div>
+              </div>
+              <div class="field-item-actions">
+                <button onclick="event.stopPropagation();duplicateField(${idx})" title="Duplicar">${copyIcon}</button>
+                <button onclick="event.stopPropagation();moveField(${idx},-1)" title="Mover para cima">${upIcon}</button>
+                <button onclick="event.stopPropagation();moveField(${idx},1)" title="Mover para baixo">${downIcon}</button>
+                <button class="delete" onclick="event.stopPropagation();removeField(${idx})" title="Remover">${trashIcon}</button>
+              </div>
+            </div>
+          </div>`;
+      }).join('');
+    }
+
+    function addField(type) {
+      const field = Storage.createField(type);
+      form.fields.push(field);
+      renderFields();
+      selectField(field.id);
+      autoSave();
+    }
+
+    function removeField(idx) {
+      if (form.fields[idx].id === selectedFieldId) { selectedFieldId = null; showNoFieldSelected(); }
+      form.fields.splice(idx, 1);
+      renderFields(); autoSave();
+    }
+
+    function duplicateField(idx) {
+      const clone = JSON.parse(JSON.stringify(form.fields[idx]));
+      clone.id = Storage.generateId();
+      form.fields.splice(idx + 1, 0, clone);
+      renderFields(); selectField(clone.id); autoSave();
+    }
+
+    function moveField(idx, dir) {
+      const ni = idx + dir;
+      if (ni < 0 || ni >= form.fields.length) return;
+      [form.fields[idx], form.fields[ni]] = [form.fields[ni], form.fields[idx]];
+      renderFields(); autoSave();
+    }
+
+    function onDragStart(e, idx) { dragSrcIndex = idx; e.target.classList.add('dragging'); e.dataTransfer.effectAllowed = 'move'; }
+    function onDragOver(e, idx) { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; e.target.closest('.field-item')?.classList.add('drag-over'); }
+    function onDragLeave(e) { e.target.closest('.field-item')?.classList.remove('drag-over'); }
+    function onDrop(e, idx) {
+      e.preventDefault();
+      document.querySelectorAll('.drag-over').forEach(el => el.classList.remove('drag-over'));
+      if (dragSrcIndex === null || dragSrcIndex === idx) return;
+      const [m] = form.fields.splice(dragSrcIndex, 1);
+      form.fields.splice(idx, 0, m);
+      renderFields(); autoSave();
+    }
+    function onDragEnd() {
+      dragSrcIndex = null;
+      document.querySelectorAll('.dragging,.drag-over').forEach(el => el.classList.remove('dragging','drag-over'));
+    }
+
+    function selectField(id) { selectedFieldId = id; renderFields(); renderFieldSettings(); }
+    function showNoFieldSelected() {
+      document.getElementById('noFieldSelected').style.display = 'block';
+      document.getElementById('fieldSettings').style.display = 'none';
+    }
+
+    function renderFieldSettings() {
+      const field = form.fields.find(f => f.id === selectedFieldId);
+      if (!field) return showNoFieldSelected();
+      document.getElementById('noFieldSelected').style.display = 'none';
+      const c = document.getElementById('fieldSettings');
+      c.style.display = 'block';
+
+      let html = `
+        <div class="settings-title">Campo</div>
+        <div class="settings-group">
+          <label>Título</label>
+          <input type="text" class="input" value="${ea(field.title)}" onchange="updateField('title',this.value)">
+        </div>
+        <div class="settings-group">
+          <label>Descrição</label>
+          <textarea class="input" rows="2" onchange="updateField('description',this.value)">${esc(field.description||'')}</textarea>
+        </div>`;
+
+      if (['short_text','long_text','email','phone','number','url','date'].includes(field.type)) {
+        html += `<div class="settings-group"><label>Placeholder</label><input type="text" class="input" value="${ea(field.placeholder||'')}" onchange="updateField('placeholder',this.value)"></div>`;
+      }
+
+      if (['multiple_choice','checkbox','dropdown'].includes(field.type)) {
+        html += `<div class="settings-group"><label>Opções</label><div class="options-list" id="optionsList">
+          ${(field.options||[]).map((opt,i) => `<div class="option-row"><input type="text" value="${ea(opt)}" onchange="updateOption(${i},this.value)"><button onclick="removeOption(${i})"><svg width="10" height="10" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="1" y1="1" x2="9" y2="9"/><line x1="9" y1="1" x2="1" y2="9"/></svg></button></div>`).join('')}
+        </div>
+        <button class="add-option-btn" onclick="addOption()">+ Adicionar opção</button></div>`;
+        if (field.type === 'multiple_choice') html += `<div class="toggle-row"><span>Permitir múltiplas</span><label class="toggle"><input type="checkbox" ${field.allowMultiple?'checked':''} onchange="updateField('allowMultiple',this.checked)"><span class="slider"></span></label></div>`;
+      }
+
+      if (field.type === 'rating') {
+        html += `<div class="settings-group"><label>Máximo de estrelas</label><select class="input" onchange="updateField('maxRating',parseInt(this.value))">${[3,4,5,6,7,8,9,10].map(n=>`<option value="${n}" ${field.maxRating===n?'selected':''}>${n}</option>`).join('')}</select></div>`;
+      }
+
+      if (field.type === 'opinion_scale') {
+        html += `
+          <div class="settings-group"><label>Valor mínimo</label><select class="input" onchange="updateField('minValue',parseInt(this.value))"><option value="0" ${field.minValue===0?'selected':''}>0</option><option value="1" ${field.minValue===1?'selected':''}>1</option></select></div>
+          <div class="settings-group"><label>Valor máximo</label><select class="input" onchange="updateField('maxValue',parseInt(this.value))">${[5,7,10].map(n=>`<option value="${n}" ${field.maxValue===n?'selected':''}>${n}</option>`).join('')}</select></div>
+          <div class="settings-group"><label>Label esquerdo</label><input type="text" class="input" value="${ea(field.minLabel||'')}" onchange="updateField('minLabel',this.value)"></div>
+          <div class="settings-group"><label>Label direito</label><input type="text" class="input" value="${ea(field.maxLabel||'')}" onchange="updateField('maxLabel',this.value)"></div>`;
+      }
+
+      if (['welcome','statement'].includes(field.type)) {
+        html += `<div class="settings-group"><label>Texto do botão</label><input type="text" class="input" value="${ea(field.buttonText||'Começar')}" onchange="updateField('buttonText',this.value)"></div>`;
+      }
+
+      if (!['welcome','statement','thank_you'].includes(field.type)) {
+        html += `<div class="toggle-row" style="margin-top:16px;"><span>Obrigatório</span><label class="toggle"><input type="checkbox" ${field.required?'checked':''} onchange="updateField('required',this.checked)"><span class="slider"></span></label></div>`;
+      }
+
+      c.innerHTML = html;
+      if (currentTab !== 'build') switchTab('build');
+    }
+
+    function updateField(k, v) {
+      const f = form.fields.find(f => f.id === selectedFieldId);
+      if (!f) return;
+      f[k] = v; renderFields(); autoSave();
+    }
+    function updateOption(idx, v) {
+      const f = form.fields.find(f => f.id === selectedFieldId);
+      if (f?.options) { f.options[idx] = v; autoSave(); }
+    }
+    function addOption() {
+      const f = form.fields.find(f => f.id === selectedFieldId);
+      if (!f) return;
+      if (!f.options) f.options = [];
+      f.options.push(`Opção ${f.options.length + 1}`);
+      renderFieldSettings(); autoSave();
+    }
+    function removeOption(idx) {
+      const f = form.fields.find(f => f.id === selectedFieldId);
+      if (f?.options) { f.options.splice(idx, 1); renderFieldSettings(); autoSave(); }
+    }
+
+    function loadThemeSettings() {
+      const t = form.theme || {};
+      document.getElementById('themePrimary').value = t.primaryColor || '#6C5CE7';
+      document.getElementById('themeBg').value = t.backgroundColor || '#1a1a2e';
+      document.getElementById('themeText').value = t.textColor || '#ffffff';
+      document.getElementById('themeFont').value = t.fontFamily || 'Inter';
+      document.getElementById('themeBgImage').value = t.backgroundImage || '';
+    }
+    function saveThemeSettings() {
+      form.theme = {
+        primaryColor: document.getElementById('themePrimary').value,
+        backgroundColor: document.getElementById('themeBg').value,
+        textColor: document.getElementById('themeText').value,
+        fontFamily: document.getElementById('themeFont').value,
+        backgroundImage: document.getElementById('themeBgImage').value
+      };
+    }
+    ['themePrimary','themeBg','themeText','themeFont','themeBgImage'].forEach(id => {
+      document.getElementById(id).addEventListener('input', () => { saveThemeSettings(); autoSave(); });
+    });
+
+    function loadFormSettings() {
+      const s = form.settings || {};
+      document.getElementById('settingProgressBar').checked = s.showProgressBar !== false;
+      document.getElementById('settingNumbers').checked = s.showQuestionNumbers !== false;
+      document.getElementById('settingSubmitText').value = s.submitButtonText || 'Enviar';
+      document.getElementById('settingThankTitle').value = s.thankYouTitle || 'Obrigado!';
+      document.getElementById('settingThankMsg').value = s.thankYouMessage || '';
+      document.getElementById('settingRedirectUrl').value = s.thankYouRedirectUrl || '';
+    }
+    function saveFormSettings() {
+      form.settings = {
+        showProgressBar: document.getElementById('settingProgressBar').checked,
+        showQuestionNumbers: document.getElementById('settingNumbers').checked,
+        submitButtonText: document.getElementById('settingSubmitText').value,
+        thankYouTitle: document.getElementById('settingThankTitle').value,
+        thankYouMessage: document.getElementById('settingThankMsg').value,
+        thankYouRedirectUrl: document.getElementById('settingRedirectUrl').value
+      };
+    }
+    ['settingProgressBar','settingNumbers','settingSubmitText','settingThankTitle','settingThankMsg','settingRedirectUrl'].forEach(id => {
+      const el = document.getElementById(id);
+      el.addEventListener('input', () => { saveFormSettings(); autoSave(); });
+      el.addEventListener('change', () => { saveFormSettings(); autoSave(); });
+    });
+
+    let autoSaveTimeout;
+    function autoSave() {
+      clearTimeout(autoSaveTimeout);
+      autoSaveTimeout = setTimeout(() => {
+        form.title = document.getElementById('formTitle').value || 'Formulário sem título';
+        saveThemeSettings(); saveFormSettings();
+        Storage.saveForm(form);
+      }, 500);
+    }
+
+    function saveForm() {
+      form.title = document.getElementById('formTitle').value || 'Formulário sem título';
+      saveThemeSettings(); saveFormSettings();
+      Storage.saveForm(form);
+      showToast('Salvo', 'success');
+    }
+
+    function togglePublish() {
+      form.published = !form.published;
+      Storage.saveForm(form);
+      updatePublishBtn();
+      showToast(form.published ? 'Formulário publicado' : 'Despublicado', form.published ? 'success' : 'info');
+    }
+    function updatePublishBtn() {
+      const btn = document.getElementById('publishBtn');
+      btn.textContent = form.published ? 'Despublicar' : 'Publicar';
+      btn.classList.toggle('btn-danger', form.published);
+      btn.classList.toggle('btn-secondary', !form.published);
+    }
+
+    document.getElementById('formTitle').addEventListener('input', autoSave);
+
+    function previewForm() {
+      saveForm();
+      document.getElementById('previewFrame').src = `view.html?id=${form.id}&preview=1`;
+      document.getElementById('previewOverlay').classList.add('active');
+    }
+    function closePreview() {
+      document.getElementById('previewOverlay').classList.remove('active');
+      document.getElementById('previewFrame').src = '';
+    }
+
+    function showToast(msg, type = 'info') {
+      const c = document.getElementById('toastContainer');
+      const t = document.createElement('div');
+      t.className = `toast toast-${type}`; t.textContent = msg;
+      c.appendChild(t); setTimeout(() => t.remove(), 3000);
+    }
+    function esc(str) { const d = document.createElement('div'); d.textContent = str||''; return d.innerHTML; }
+    function ea(str) { return (str||'').replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
+
+    document.addEventListener('keydown', e => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); saveForm(); }
+      if (e.key === 'Escape') closePreview();
+    });
+
+    init();
+  </script>
+</body>
+</html>
