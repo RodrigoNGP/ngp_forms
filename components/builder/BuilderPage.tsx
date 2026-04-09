@@ -410,7 +410,10 @@ function ThemePanel({ form, update }: { form: NGPForm; update: (p: Partial<NGPFo
   const set = (k: keyof typeof t, v: string) => update({ theme: { ...t, [k]: v } });
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState('');
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+  const [logoError, setLogoError] = useState('');
   const fileRef = useRef<HTMLInputElement>(null);
+  const logoRef = useRef<HTMLInputElement>(null);
 
   async function handleImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -429,15 +432,37 @@ function ThemePanel({ form, update }: { form: NGPForm; update: (p: Partial<NGPFo
     }
   }
 
+  async function handleLogoUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 2 * 1024 * 1024) { setLogoError('Máximo 2 MB'); return; }
+    setLogoError('');
+    setUploadingLogo(true);
+    try {
+      const url = await DB.uploadImage(file, form.id);
+      set('logoUrl', url);
+    } catch {
+      setLogoError('Erro ao fazer upload. Verifique o bucket "form-images" no Supabase Storage.');
+    } finally {
+      setUploadingLogo(false);
+      if (logoRef.current) logoRef.current.value = '';
+    }
+  }
+
   function removeImage() {
     if (t.backgroundImage) DB.deleteImage(t.backgroundImage).catch(() => {});
     set('backgroundImage', '');
   }
 
+  function removeLogo() {
+    if (t.logoUrl) DB.deleteImage(t.logoUrl).catch(() => {});
+    set('logoUrl', '');
+  }
+
   return (
     <div className={styles.settingsBody}>
       <div className={styles.themeGrid}>
-        {([['primaryColor', 'Cor primária'], ['backgroundColor', 'Fundo'], ['textColor', 'Texto']] as [keyof typeof t, string][]).map(([key, label]) => (
+        {([['primaryColor', 'Cor primária'], ['backgroundColor', 'Fundo'], ['textColor', 'Texto'], ['buttonColor', 'Botão']] as [keyof typeof t, string][]).map(([key, label]) => (
           <div key={key} className={styles.colorGroup}>
             <span className={styles.colorLabel}>{label}</span>
             <input type="color" className={styles.colorInput} value={t[key] || '#000000'} onChange={e => set(key, e.target.value)} />
@@ -496,6 +521,49 @@ function ThemePanel({ form, update }: { form: NGPForm; update: (p: Partial<NGPFo
 
         {uploadError && <div style={{ marginTop: 6, fontSize: 11, color: 'var(--danger)' }}>{uploadError}</div>}
         <div style={{ marginTop: 6, fontSize: 11, color: 'var(--text-muted)' }}>JPG, PNG, WebP · máx 5 MB</div>
+      </div>
+
+      {/* ── Logo ── */}
+      <div className={styles.settingsGroup}>
+        <label className={styles.settingsLabel}>Logo</label>
+
+        {t.logoUrl ? (
+          <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', gap: 10, padding: '10px 12px', background: 'var(--bg-dark)', border: '1px solid var(--border)', borderRadius: 8 }}>
+            <img src={t.logoUrl} alt="Logo" style={{ height: 36, maxWidth: 120, objectFit: 'contain' }} />
+            <button
+              type="button"
+              onClick={removeLogo}
+              style={{ background: 'rgba(0,0,0,0.5)', border: 'none', borderRadius: 6, padding: '4px 8px', color: '#fff', fontSize: 11, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}
+            >
+              <svg width="10" height="10" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M1 1l8 8M9 1L1 9"/></svg>
+              Remover
+            </button>
+          </div>
+        ) : (
+          <button
+            type="button"
+            disabled={uploadingLogo}
+            onClick={() => logoRef.current?.click()}
+            style={{ width: '100%', padding: '18px 12px', border: '2px dashed var(--border)', borderRadius: 8, background: 'transparent', color: uploadingLogo ? 'var(--text-muted)' : 'var(--text-secondary)', fontSize: 13, cursor: uploadingLogo ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, transition: 'var(--transition)' }}
+          >
+            {uploadingLogo ? (
+              <>
+                <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" style={{ animation: 'spin 1s linear infinite' }}><path d="M7 1v2M7 11v2M1 7h2M11 7h2M2.5 2.5l1.5 1.5M8.5 8.5l1.5 1.5M2.5 11.5l1.5-1.5M8.5 5.5l1.5-1.5"/></svg>
+                Enviando…
+              </>
+            ) : (
+              <>
+                <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M7 1v8M4 4l3-3 3 3"/><path d="M1 11v2h12v-2"/></svg>
+                Clique para fazer upload
+              </>
+            )}
+          </button>
+        )}
+
+        <input ref={logoRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleLogoUpload} />
+
+        {logoError && <div style={{ marginTop: 6, fontSize: 11, color: 'var(--danger)' }}>{logoError}</div>}
+        <div style={{ marginTop: 6, fontSize: 11, color: 'var(--text-muted)' }}>PNG, SVG, WebP · máx 2 MB</div>
       </div>
     </div>
   );

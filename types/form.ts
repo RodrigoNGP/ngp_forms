@@ -29,8 +29,10 @@ export interface FormTheme {
   primaryColor: string;
   backgroundColor: string;
   textColor: string;
+  buttonColor: string;
   fontFamily: string;
   backgroundImage: string;
+  logoUrl: string;
 }
 
 export interface FormSettings {

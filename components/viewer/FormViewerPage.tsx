@@ -39,6 +39,7 @@ export function FormViewerPage({ id }: { id: string }) {
       r.setProperty('--viewer-primary', f.theme.primaryColor);
       r.setProperty('--viewer-bg', f.theme.backgroundColor);
       r.setProperty('--viewer-text', f.theme.textColor);
+      r.setProperty('--viewer-button', f.theme.buttonColor || f.theme.primaryColor);
       r.setProperty('--viewer-font', f.theme.fontFamily);
 
       // ── GTM injection ──
@@ -251,6 +252,9 @@ export function FormViewerPage({ id }: { id: string }) {
     <div className={styles.wrap}>
       {form.theme.backgroundImage && (
         <div className={styles.bgImage} style={{ backgroundImage: `url(${form.theme.backgroundImage})` }} />
+      )}
+      {form.theme.logoUrl && (
+        <img src={form.theme.logoUrl} alt="Logo" className={styles.formLogo} />
       )}
       {isPreview && <div className={styles.previewBanner}>Modo pré-visualização — as respostas não serão salvas</div>}
 
