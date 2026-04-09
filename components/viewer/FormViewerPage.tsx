@@ -367,8 +367,14 @@ function renderSlide(
           type="tel"
           inputMode="numeric"
           placeholder={field.placeholder || '(00) 00000-0000'}
-          value={(val as string) || ''}
-          maxLength={11}
+          value={(() => {
+            const d = ((val as string) || '').replace(/\D/g, '');
+            if (d.length === 0) return '';
+            if (d.length <= 2) return `(${d}`;
+            if (d.length <= 7) return `(${d.slice(0,2)}) ${d.slice(2)}`;
+            return `(${d.slice(0,2)}) ${d.slice(2,7)}-${d.slice(7,11)}`;
+          })()}
+          maxLength={15}
           onChange={e => {
             const onlyDigits = e.target.value.replace(/\D/g, '').slice(0, 11);
             setAnswer(field.id, onlyDigits);
