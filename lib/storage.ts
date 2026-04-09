@@ -17,6 +17,7 @@ export function createBlankForm(): NGPForm {
       backgroundColor: '#1a1a2e',
       textColor: '#ffffff',
       buttonColor: '#6C5CE7',
+      choiceBorderColor: '#cccccc',
       fontFamily: 'Inter',
       backgroundImage: '',
       logoUrl: '',

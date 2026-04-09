@@ -1,3 +1,28 @@
+/* ── Loading skeleton ── */
+.loadingWrap {
+  width: 100vw; height: 100vh;
+  background: #0f0f1a;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: 18px; padding: 0 24px;
+}
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    rgba(255,255,255,0.04) 0%,
+    rgba(255,255,255,0.09) 50%,
+    rgba(255,255,255,0.04) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.4s ease-in-out infinite;
+  border-radius: 6px;
+}
+@keyframes shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position:  200% 0; }
+}
+
+/* ── Main wrap ── */
 .wrap {
   position: relative; width: 100vw; height: 100vh;
   overflow: hidden; font-family: var(--viewer-font, 'Inter', sans-serif);
@@ -72,11 +97,11 @@ textarea.textInput:focus { border-color: var(--viewer-primary, #6C5CE7); }
 .choices { display: flex; flex-direction: column; gap: 10px; }
 .choiceBtn {
   display: flex; align-items: center; gap: 14px; padding: 14px 18px;
-  background: rgba(255,255,255,0.05); border: 2px solid rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.05); border: 2px solid var(--viewer-choice-border, rgba(255,255,255,0.12));
   border-radius: 10px; cursor: pointer; transition: all 0.15s; color: inherit;
   font-size: 16px; font-weight: 500; text-align: left;
 }
-.choiceBtn:hover { background: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.25); }
+.choiceBtn:hover { background: rgba(255,255,255,0.08); border-color: var(--viewer-choice-border, rgba(255,255,255,0.25)); }
 .choiceBtn.selected { border-color: var(--viewer-primary, #6C5CE7); background: rgba(108,92,231,0.15); }
 .choiceKey {
   min-width: 26px; height: 26px; border-radius: 5px; font-size: 11px; font-weight: 700;
@@ -89,11 +114,11 @@ textarea.textInput:focus { border-color: var(--viewer-primary, #6C5CE7); }
 .yesno { display: flex; gap: 14px; }
 .yesnoBtn {
   flex: 1; padding: 18px; border-radius: 12px; font-size: 17px; font-weight: 700;
-  background: rgba(255,255,255,0.05); border: 2px solid rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.05); border: 2px solid var(--viewer-choice-border, rgba(255,255,255,0.12));
   cursor: pointer; color: inherit; transition: all 0.15s;
   display: flex; align-items: center; justify-content: center; gap: 8px;
 }
-.yesnoBtn:hover { background: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.3); }
+.yesnoBtn:hover { background: rgba(255,255,255,0.08); border-color: var(--viewer-choice-border, rgba(255,255,255,0.3)); }
 .yesnoBtn.selected { border-color: var(--viewer-primary, #6C5CE7); background: rgba(108,92,231,0.15); }
 
 /* rating */

@@ -2,11 +2,17 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import dynamic from 'next/dynamic';
 import * as Storage from '@/lib/storage';
 import * as DB from '@/lib/db';
 import { useToast } from '@/hooks/useToast';
-import type { NGPForm, FormField, FieldType } from '@/types/form';
+import type { NGPForm, FormField, FieldType, FieldLogicRule } from '@/types/form';
 import styles from './BuilderPage.module.css';
+
+const FlowEditor = dynamic(
+  () => import('./FlowEditor').then(m => m.FlowEditor),
+  { ssr: false, loading: () => <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', fontSize: 13 }}>Carregando editor de fluxo…</div> }
+);
 
 /* ── Icons ── */
 const I = {
@@ -78,7 +84,7 @@ export function BuilderPage() {
 
   const [form, setForm] = useState<NGPForm | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'build' | 'theme' | 'settings'>('build');
+  const [activeTab, setActiveTab] = useState<'build' | 'flow' | 'theme' | 'settings'>('build');
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
   const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
   const dragSrcIdx = useRef<number | null>(null);
@@ -129,6 +135,13 @@ export function BuilderPage() {
     setTimeout(() => {
       document.getElementById('canvas-end')?.scrollIntoView({ behavior: 'smooth' });
     }, 50);
+  }
+
+  // addField variant used from the Flow editor — stays in flow tab
+  function addFieldFromFlow(type: FieldType) {
+    if (!form) return;
+    const field = Storage.createField(type);
+    updateForm({ fields: [...form.fields, field] });
   }
 
   function removeField(id: string) {
@@ -182,9 +195,9 @@ export function BuilderPage() {
           placeholder="Título do formulário"
         />
         <div className={styles.tabs}>
-          {(['build', 'theme', 'settings'] as const).map(t => (
+          {(['build', 'flow', 'theme', 'settings'] as const).map(t => (
             <button key={t} className={`${styles.tabBtn}${activeTab === t ? ' ' + styles.active : ''}`} onClick={() => setActiveTab(t)}>
-              {t === 'build' ? 'Perguntas' : t === 'theme' ? 'Tema' : 'Config'}
+              {t === 'build' ? 'Perguntas' : t === 'flow' ? 'Fluxo' : t === 'theme' ? 'Tema' : 'Config'}
             </button>
           ))}
         </div>
@@ -218,8 +231,20 @@ export function BuilderPage() {
       </aside>
 
       {/* ── Canvas ── */}
-      <main className={styles.canvas}>
-        {form.fields.length === 0 ? (
+      <main
+        className={styles.canvas}
+        style={activeTab === 'flow'
+          ? { gridColumn: '2 / 4', overflow: 'hidden', padding: 0, display: 'flex', flexDirection: 'column' }
+          : {}}
+      >
+        {activeTab === 'flow' ? (
+          <FlowEditor
+            form={form}
+            updateField={updateField}
+            addField={addFieldFromFlow}
+            onSelectField={(id) => { setSelectedId(id); setActiveTab('build'); }}
+          />
+        ) : form.fields.length === 0 ? (
           <div className={styles.canvasEmpty}>
             <I.EmptyCanvas />
             <p>Clique em um tipo de campo<br />ao lado para adicionar</p>
@@ -259,7 +284,7 @@ export function BuilderPage() {
       </main>
 
       {/* ── Right Panel ── */}
-      <aside className={styles.rightPanel}>
+      {activeTab === 'flow' ? null : <aside className={styles.rightPanel}>
         {activeTab === 'build' && !selectedField && (
           <div className={styles.noField}>
             <I.EmptyRight />
@@ -267,11 +292,11 @@ export function BuilderPage() {
           </div>
         )}
         {activeTab === 'build' && selectedField && (
-          <FieldSettingsPanel field={selectedField} update={(p) => updateField(selectedField.id, p)} />
+          <FieldSettingsPanel field={selectedField} allFields={form.fields} update={(p) => updateField(selectedField.id, p)} />
         )}
         {activeTab === 'theme' && <ThemePanel form={form} update={updateForm} />}
         {activeTab === 'settings' && <FormSettingsPanel form={form} update={updateForm} />}
-      </aside>
+      </aside>}
 
       {/* Toasts */}
       <div className="toast-container">
@@ -281,8 +306,10 @@ export function BuilderPage() {
   );
 }
 
+/* ── (FlowView replaced by FlowEditor in FlowEditor.tsx) ── */
+
 /* ── Field settings panel ── */
-function FieldSettingsPanel({ field, update }: { field: FormField; update: (p: Partial<FormField>) => void }) {
+function FieldSettingsPanel({ field, allFields, update }: { field: FormField; allFields: FormField[]; update: (p: Partial<FormField>) => void }) {
   const showOptions = ['multiple_choice', 'checkbox', 'dropdown', 'picture_choice'].includes(field.type);
   const showPlaceholder = ['short_text', 'long_text', 'email', 'phone', 'number', 'url'].includes(field.type);
   const isLayout = ['welcome', 'statement', 'thank_you'].includes(field.type);
@@ -400,7 +427,74 @@ function FieldSettingsPanel({ field, update }: { field: FormField; update: (p: P
           </div>
         </>
       )}
+
+      {/* ── Logic / Skip logic ── */}
+      {['yes_no', 'multiple_choice', 'dropdown'].includes(field.type) && (
+        <LogicPanel field={field} allFields={allFields} update={update} />
+      )}
     </div>
+  );
+}
+
+/* ── Logic panel ── */
+function LogicPanel({ field, allFields, update }: { field: FormField; allFields: FormField[]; update: (p: Partial<FormField>) => void }) {
+  const logic = field.logic || [];
+
+  // conditions available for this field type
+  const conditions: { value: string; label: string }[] =
+    field.type === 'yes_no'
+      ? [{ value: 'sim', label: 'Sim' }, { value: 'nao', label: 'Não' }]
+      : (field.options || []).map(o => ({ value: o, label: o }));
+
+  // destination options: other fields (excluding self) + submit
+  const destinations = allFields
+    .filter(f => f.id !== field.id)
+    .map(f => ({ value: f.id, label: f.title || '(sem título)' }));
+  destinations.push({ value: 'submit', label: '→ Enviar formulário' });
+
+  function setRule(condition: string, jumpToFieldId: string) {
+    const existing = logic.filter(r => r.condition !== condition);
+    const updated: FieldLogicRule[] = jumpToFieldId === ''
+      ? existing
+      : [...existing, { condition, jumpToFieldId }];
+    update({ logic: updated });
+  }
+
+  function getRule(condition: string): string {
+    return logic.find(r => r.condition === condition)?.jumpToFieldId ?? '';
+  }
+
+  return (
+    <>
+      <hr className={styles.settingsDivider} />
+      <div className={styles.settingsGroup}>
+        <label className={styles.settingsLabel}>
+          <svg width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" style={{ marginRight: 6 }}><path d="M1 3h10M1 7h6M1 11h4"/><path d="M9 9l3 3-3 3" /></svg>
+          Lógica condicional
+        </label>
+        {conditions.map(c => (
+          <div key={c.value} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+            <span style={{ fontSize: 12, color: 'var(--text-muted)', minWidth: 36 }}>Se</span>
+            <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', minWidth: 48 }}>{c.label}</span>
+            <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>→</span>
+            <select
+              className="input"
+              style={{ fontSize: 12, padding: '5px 8px', flex: 1 }}
+              value={getRule(c.value)}
+              onChange={e => setRule(c.value, e.target.value)}
+            >
+              <option value="">Próxima pergunta</option>
+              {destinations.map(d => (
+                <option key={d.value} value={d.value}>{d.label}</option>
+              ))}
+            </select>
+          </div>
+        ))}
+        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
+          Sem regra definida, avança normalmente.
+        </div>
+      </div>
+    </>
   );
 }
 
@@ -462,7 +556,7 @@ function ThemePanel({ form, update }: { form: NGPForm; update: (p: Partial<NGPFo
   return (
     <div className={styles.settingsBody}>
       <div className={styles.themeGrid}>
-        {([['primaryColor', 'Cor primária'], ['backgroundColor', 'Fundo'], ['textColor', 'Texto'], ['buttonColor', 'Botão']] as [keyof typeof t, string][]).map(([key, label]) => (
+        {([['primaryColor', 'Cor primária'], ['backgroundColor', 'Fundo'], ['textColor', 'Texto'], ['buttonColor', 'Botão'], ['choiceBorderColor', 'Linhas']] as [keyof typeof t, string][]).map(([key, label]) => (
           <div key={key} className={styles.colorGroup}>
             <span className={styles.colorLabel}>{label}</span>
             <input type="color" className={styles.colorInput} value={t[key] || '#000000'} onChange={e => set(key, e.target.value)} />

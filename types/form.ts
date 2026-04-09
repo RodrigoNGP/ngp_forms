@@ -4,6 +4,11 @@ export type FieldType =
   | 'rating' | 'opinion_scale' | 'date' | 'file_upload'
   | 'welcome' | 'statement' | 'thank_you' | 'picture_choice';
 
+export interface FieldLogicRule {
+  condition: string;      // option value, 'sim', 'nao', or '*' (qualquer resposta)
+  jumpToFieldId: string;  // field id to jump to, or 'submit' to end the form
+}
+
 export interface FormField {
   id: string;
   type: FieldType;
@@ -23,6 +28,7 @@ export interface FormField {
   buttonText?: string;
   maxSize?: number;
   allowedTypes?: string;
+  logic?: FieldLogicRule[];
 }
 
 export interface FormTheme {
@@ -30,6 +36,7 @@ export interface FormTheme {
   backgroundColor: string;
   textColor: string;
   buttonColor: string;
+  choiceBorderColor: string;
   fontFamily: string;
   backgroundImage: string;
   logoUrl: string;

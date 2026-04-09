@@ -10,6 +10,33 @@ import styles from './FormViewerPage.module.css';
 
 type Answers = Record<string, string | string[] | number | null>;
 
+/* ── Form cache (stale-while-revalidate, 10 min TTL) ── */
+const CACHE_TTL = 10 * 60 * 1000;
+
+function readCache(id: string): NGPForm | null {
+  try {
+    const raw = localStorage.getItem(`ngp_form_${id}`);
+    if (!raw) return null;
+    const { form, ts } = JSON.parse(raw) as { form: NGPForm; ts: number };
+    if (Date.now() - ts > CACHE_TTL) { localStorage.removeItem(`ngp_form_${id}`); return null; }
+    return form;
+  } catch { return null; }
+}
+
+function writeCache(id: string, form: NGPForm) {
+  try { localStorage.setItem(`ngp_form_${id}`, JSON.stringify({ form, ts: Date.now() })); } catch {}
+}
+
+function applyTheme(f: NGPForm) {
+  const r = document.documentElement.style;
+  r.setProperty('--viewer-primary', f.theme.primaryColor);
+  r.setProperty('--viewer-bg', f.theme.backgroundColor);
+  r.setProperty('--viewer-text', f.theme.textColor);
+  r.setProperty('--viewer-button', f.theme.buttonColor || f.theme.primaryColor);
+  r.setProperty('--viewer-choice-border', f.theme.choiceBorderColor || 'rgba(255,255,255,0.12)');
+  r.setProperty('--viewer-font', f.theme.fontFamily);
+}
+
 export function FormViewerPage({ id }: { id: string }) {
   const searchParams = useSearchParams();
   const isPreview = searchParams.get('preview') === '1';
@@ -17,6 +44,7 @@ export function FormViewerPage({ id }: { id: string }) {
   const [form, setForm] = useState<NGPForm | null>(null);
   const [notFound, setNotFound] = useState(false);
   const [current, setCurrent] = useState(0);
+  const [history, setHistory] = useState<number[]>([]); // navigation history for back button
   const [direction, setDirection] = useState<'down' | 'up'>('down');
   const [answers, setAnswers] = useState<Answers>({});
   const [submitted, setSubmitted] = useState(false);
@@ -31,27 +59,38 @@ export function FormViewerPage({ id }: { id: string }) {
   const gtmActiveRef = useRef<boolean>(false);
 
   useEffect(() => {
+    let cancelled = false;
+
+    // ── 1. Instant load from localStorage cache ──
+    const cached = readCache(id);
+    if (cached) {
+      setForm(cached);
+      document.title = cached.title;
+      applyTheme(cached);
+    }
+
+    // ── 2. Always fetch fresh data (stale-while-revalidate) ──
     DB.getForm(id).then(f => {
+      if (cancelled) return; // React Strict Mode cleanup or unmount
       if (!f) { setNotFound(true); return; }
+
+      writeCache(id, f); // refresh cache
       setForm(f);
       document.title = f.title;
-      const r = document.documentElement.style;
-      r.setProperty('--viewer-primary', f.theme.primaryColor);
-      r.setProperty('--viewer-bg', f.theme.backgroundColor);
-      r.setProperty('--viewer-text', f.theme.textColor);
-      r.setProperty('--viewer-button', f.theme.buttonColor || f.theme.primaryColor);
-      r.setProperty('--viewer-font', f.theme.fontFamily);
+      applyTheme(f);
 
-      // ── GTM injection ──
-      if (!isPreview && f.settings.gtmContainerId) {
+      // ── GTM injection (only when fresh, not from cache) ──
+      if (!isPreview && f.settings.gtmContainerId && !gtmActiveRef.current) {
         const injected = GTM.injectGTM(f.settings.gtmContainerId);
         gtmActiveRef.current = injected;
         if (injected) { formStartRef.current = Date.now(); GTM.gtmFormStart(f.id, f.title); }
       }
 
       // ── Session tracking (skip in preview) ──
-      if (!isPreview) {
-        DB.createSession(f.id).then(session => { sessionRef.current = session; }).catch(() => {});
+      if (!isPreview && !sessionRef.current) {
+        DB.createSession(f.id).then(session => {
+          if (!cancelled) sessionRef.current = session;
+        }).catch(() => {});
       }
 
       // ── Abandon on tab close ──
@@ -73,12 +112,12 @@ export function FormViewerPage({ id }: { id: string }) {
         }
       };
       window.addEventListener('beforeunload', handleUnload);
-      // store cleanup fn in a ref so it can be removed
       (window as Window & { _ngpCleanup?: () => void })._ngpCleanup = () =>
         window.removeEventListener('beforeunload', handleUnload);
-    }).catch(() => setNotFound(true));
+    }).catch(() => { if (!cancelled) setNotFound(true); });
 
     return () => {
+      cancelled = true;
       (window as Window & { _ngpCleanup?: () => void })._ngpCleanup?.();
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -125,7 +164,33 @@ export function FormViewerPage({ id }: { id: string }) {
       if (empty) { setShowError(true); return; }
     }
     setShowError(false);
+
+    // ── Conditional logic ──
+    if (slide?.logic && slide.logic.length > 0) {
+      const ans = answers[slide.id];
+      const ansStr = Array.isArray(ans) ? ans[0] : String(ans ?? '');
+      // normalize yes_no answer
+      const normalized = ansStr === 'yes' ? 'sim' : ansStr === 'no' ? 'nao' : ansStr;
+      const rule = slide.logic.find(r => r.condition === normalized || r.condition === ansStr)
+                ?? slide.logic.find(r => r.condition === '*');
+      if (rule) {
+        if (rule.jumpToFieldId === 'submit') {
+          handleSubmit();
+          return;
+        }
+        const targetIdx = slides.findIndex(f => f.id === rule.jumpToFieldId);
+        if (targetIdx !== -1) {
+          setHistory(h => [...h, current]);
+          setDirection('down');
+          setCurrent(targetIdx);
+          setTimeout(() => (inputRef.current as HTMLElement)?.focus?.(), 300);
+          return;
+        }
+      }
+    }
+
     if (current < total - 1) {
+      setHistory(h => [...h, current]);
       setDirection('down');
       setCurrent(c => c + 1);
       setTimeout(() => (inputRef.current as HTMLElement)?.focus?.(), 300);
@@ -135,12 +200,14 @@ export function FormViewerPage({ id }: { id: string }) {
   }, [current, total, slides, answers, submitted]);
 
   const goPrev = useCallback(() => {
-    if (current > 0) {
+    if (history.length > 0) {
       setShowError(false);
       setDirection('up');
-      setCurrent(c => c - 1);
+      const prev = history[history.length - 1];
+      setHistory(h => h.slice(0, -1));
+      setCurrent(prev);
     }
-  }, [current]);
+  }, [history]);
 
   // Keyboard nav
   useEffect(() => {
@@ -243,7 +310,14 @@ export function FormViewerPage({ id }: { id: string }) {
       <p>Este formulário não existe ou foi removido.</p>
     </div>
   );
-  if (!form) return null;
+  if (!form) return (
+    <div className={styles.loadingWrap}>
+      <div className={styles.skeleton} style={{ width: 340, height: 34 }} />
+      <div className={styles.skeleton} style={{ width: 460, height: 16 }} />
+      <div className={styles.skeleton} style={{ width: 460, height: 52, marginTop: 8 }} />
+      <div className={styles.skeleton} style={{ width: 110, height: 46, marginTop: 4 }} />
+    </div>
+  );
 
   const progress = total > 0 ? ((current) / total) * 100 : 0;
   const isLastSlide = current === total - 1;
@@ -298,7 +372,7 @@ export function FormViewerPage({ id }: { id: string }) {
       {/* Navigation */}
       {!submitted && (
         <div className={styles.nav}>
-          <button className={styles.navBtn} onClick={goPrev} disabled={current === 0} aria-label="Anterior">
+          <button className={styles.navBtn} onClick={goPrev} disabled={history.length === 0} aria-label="Anterior">
             <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M11 7H3M7 3L3 7l4 4"/></svg>
           </button>
           <button className={styles.navBtn} onClick={goNext} aria-label="Próximo">
