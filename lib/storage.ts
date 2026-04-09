@@ -16,8 +16,10 @@ export function createBlankForm(): NGPForm {
       primaryColor: '#6C5CE7',
       backgroundColor: '#1a1a2e',
       textColor: '#ffffff',
+      buttonColor: '#6C5CE7',
       fontFamily: 'Inter',
       backgroundImage: '',
+      logoUrl: '',
     },
     settings: {
       showProgressBar: true,
